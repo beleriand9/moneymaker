@@ -320,6 +320,8 @@
       position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
       background: #1fbf5a; color: #0b2a14; font-weight: 800; font-size: 12px; padding: 1px 8px; border-radius: 999px;
     }
+    #energyTimer.cooldown, #pillTimer.cooldown { background: #555566; color: #e0e0ea; }
+    #energyTimer, #pillTimer { white-space: nowrap; }
     #energyTip, #pillTip {
       display: none; position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%);
       width: 230px; background: #2b2d42; border: 1px solid #555566; border-radius: 10px; padding: 10px 12px;
@@ -550,12 +552,12 @@
         <b>⚡ Energy drink</b><br>
         Each click is worth <b>×5</b> for the next <b>30 seconds</b>.<br>
         Click the can to buy it for <b>50</b>.
-        <div class="muted" style="margin-top:4px">Buying another adds 30 more seconds.</div>
+        <div class="muted" style="margin-top:4px">After it wears off: 2-minute cooldown.</div>
       </div>
     </div>
 
     <div id="pillWrap" class="booster">
-      <button id="pillBtn" aria-describedby="pillTip" aria-label="Magical pill: each click gives 20% of your income per second for 30 seconds, costs 2000">
+      <button id="pillBtn" aria-describedby="pillTip" aria-label="Magical pill: each click gives 10% of your income per second for 30 seconds, costs 2000">
         <svg viewBox="0 0 48 64" width="44" height="60" aria-hidden="true">
           <!-- capsule -->
           <g transform="rotate(-25 24 42)">
@@ -578,10 +580,10 @@
       </button>
       <div id="pillTip" role="tooltip">
         <b>🧙 Magical pill</b><br>
-        For <b>30 seconds</b>, each click also gives <b>20% of your income per second</b>.<br>
+        For <b>30 seconds</b>, each click also gives <b>10% of your income per second</b>.<br>
         <span id="pillPreview" class="muted"></span><br>
         Click the pill to buy it for <b>2,000</b>.
-        <div class="muted" style="margin-top:4px">Only one pill at a time. Works together with the energy drink (×5 on the whole click).</div>
+        <div class="muted" style="margin-top:4px">After it wears off: 5-minute cooldown. Works together with the energy drink (×5 on the whole click).</div>
       </div>
     </div>
     </div>
@@ -3063,10 +3065,14 @@
     if (typeof state.energyLeft !== "number") state.energyLeft = 0;
     var energyReady = true;
 
-    // ----- Magical pill: costs 2,000; each click also gives 20% of your income per second, for 30 s -----
+    // ----- Magical pill: costs 2,000; each click also gives 10% of your income per second, for 30 s -----
     const PILL_PRICE = 2000;
     const PILL_SECONDS = 30;
-    const PILL_SHARE = 0.20;
+    const PILL_SHARE = 0.10;
+    const PILL_COOLDOWN = 300;      // 5 minutes after the effect ends
+    const ENERGY_COOLDOWN = 120;    // 2 minutes after the effect ends
+    if (typeof state.pillCooldown !== "number") state.pillCooldown = 0;
+    if (typeof state.energyCooldown !== "number") state.energyCooldown = 0;
     if (typeof state.pillLeft !== "number") state.pillLeft = 0;
     const pillActive = () => state.pillLeft > 0;
 
@@ -3084,30 +3090,36 @@
       // magical pill
       const pill = $("pillBtn");
       pill.classList.toggle("active", pillActive());
-      pill.classList.toggle("cantAfford", !pillActive() && state.money < PILL_PRICE);
-      $("pillTimer").hidden = !pillActive();
-      $("pillTimer").textContent = state.pillLeft + "s";
+      pill.classList.toggle("cantAfford", !pillActive() && (state.money < PILL_PRICE || state.pillCooldown > 0));
+      $("pillTimer").hidden = !pillActive() && state.pillCooldown === 0;
+      $("pillTimer").textContent = pillActive() ? state.pillLeft + "s" : "⏳ " + clock(state.pillCooldown);
+      $("pillTimer").classList.toggle("cooldown", !pillActive());
       $("pillPreview").textContent = "Right now that's +" + fmt(PILL_SHARE * Math.max(0, state.lastIncome || 0)) + " per click.";
 
       const btn = $("energyBtn");
       btn.classList.toggle("active", energyActive());
-      btn.classList.toggle("cantAfford", state.money < ENERGY_PRICE);
-      $("energyTimer").hidden = !energyActive();
-      $("energyTimer").textContent = state.energyLeft + "s";
+      btn.classList.toggle("cantAfford", !energyActive() && (state.money < ENERGY_PRICE || state.energyCooldown > 0));
+      $("energyTimer").hidden = !energyActive() && state.energyCooldown === 0;
+      $("energyTimer").textContent = energyActive() ? state.energyLeft + "s" : "⏳ " + clock(state.energyCooldown);
+      $("energyTimer").classList.toggle("cooldown", !energyActive());
     }
 
     // runs every second from the game loop (pauses with the game)
     function energyTick() {
-      if (state.energyLeft > 0) state.energyLeft--;
-      if (state.pillLeft > 0) state.pillLeft--;
+      if (state.energyLeft > 0) { state.energyLeft--; if (state.energyLeft === 0) state.energyCooldown = ENERGY_COOLDOWN; }
+      else if (state.energyCooldown > 0) state.energyCooldown--;
+      if (state.pillLeft > 0) { state.pillLeft--; if (state.pillLeft === 0) state.pillCooldown = PILL_COOLDOWN; }
+      else if (state.pillCooldown > 0) state.pillCooldown--;
       updateEnergy();
     }
 
     $("energyBtn").addEventListener("click", () => {
       if (isPaused()) return;
+      if (energyActive()) { showNotice("⚡ An energy drink is already working (" + state.energyLeft + "s left)."); return; }
+      if (state.energyCooldown > 0) { showNotice("⏳ Energy drink cooldown: " + clock(state.energyCooldown) + " left."); return; }
       if (state.money < ENERGY_PRICE) { showNotice("You need " + ENERGY_PRICE + " bcoins for an energy drink."); return; }
       state.money -= ENERGY_PRICE;
-      state.energyLeft += ENERGY_SECONDS;     // buying again adds 30 more seconds
+      state.energyLeft = ENERGY_SECONDS;
       showNotice("⚡ Energy drink! Clicks are worth ×" + ENERGY_MULTIPLIER + " for " + state.energyLeft + " seconds.");
       updateCounter(); updateEnergy(); save();
     });
@@ -3115,6 +3127,7 @@
     $("pillBtn").addEventListener("click", () => {
       if (isPaused()) return;
       if (pillActive()) { showNotice("🧙 A magical pill is already working (" + state.pillLeft + "s left)."); return; }
+      if (state.pillCooldown > 0) { showNotice("⏳ Magical pill cooldown: " + clock(state.pillCooldown) + " left."); return; }
       if (state.money < PILL_PRICE) { showNotice("You need " + fmt(PILL_PRICE) + " bcoins for a magical pill."); return; }
       state.money -= PILL_PRICE;
       state.pillLeft = PILL_SECONDS;

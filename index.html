@@ -638,7 +638,7 @@
     </div>
 
     <div id="influenceWrap" class="booster">
-      <button id="influenceBtn" aria-describedby="influenceTip" aria-label="Political influence: doubles income from all businesses for 1 minute, costs 250,000">
+      <button id="influenceBtn" aria-describedby="influenceTip" aria-label="Political influence: doubles income from all businesses for 2 minutes, costs 250,000">
         <svg viewBox="0 0 56 48" width="52" height="46" aria-hidden="true">
           <ellipse cx="28" cy="40" rx="26" ry="6" fill="#1b1b22"/>
           <ellipse cx="28" cy="39" rx="26" ry="5" fill="#2b2b36"/>
@@ -655,7 +655,7 @@
       </button>
       <div id="influenceTip" role="tooltip">
         <b>🎩 Political influence</b><br>
-        <b>Doubles the income of all your businesses</b> for <b>1 minute</b>.<br>
+        <b>Doubles the income of all your businesses</b> for <b>2 minutes</b>.<br>
         <span id="influencePreview" class="muted"></span><br>
         Click the hat to buy it for <b>250,000</b>.
         <div class="muted" style="margin-top:4px">After it wears off: 30-minute cooldown.</div>
@@ -3190,9 +3190,9 @@
     if (typeof state.pillLeft !== "number") state.pillLeft = 0;
     const pillActive = () => state.pillLeft > 0;
 
-    // ----- Political influence: costs 250k, all businesses earn double for 60 s, 30 min cooldown -----
+    // ----- Political influence: costs 250k, all businesses earn double for 120 s, 30 min cooldown -----
     const INFLUENCE_PRICE = 250000;
-    const INFLUENCE_SECONDS = 60;
+    const INFLUENCE_SECONDS = 120;
     const INFLUENCE_COOLDOWN = 1800;
     if (typeof state.influenceLeft !== "number") state.influenceLeft = 0;
     if (typeof state.influenceCooldown !== "number") state.influenceCooldown = 0;
@@ -3217,7 +3217,7 @@
       $("influenceTimer").textContent = influenceActive() ? state.influenceLeft + "s" : "⏳ " + clock(state.influenceCooldown);
       $("influenceTimer").classList.toggle("cooldown", !influenceActive());
       const base = Math.max(0, (state.lastIncome || 0) / (influenceActive() ? 2 : 1));
-      $("influencePreview").textContent = "Right now that's about +" + fmt(base * INFLUENCE_SECONDS) + " extra over the minute.";
+      $("influencePreview").textContent = "Right now that's about +" + fmt(base * INFLUENCE_SECONDS) + " extra over the 2 minutes.";
 
       // magical pill
       const pill = $("pillBtn");
@@ -3265,7 +3265,7 @@
       if (state.money < INFLUENCE_PRICE) { showNotice("You need " + fmt(INFLUENCE_PRICE) + " bcoins for political influence."); return; }
       state.money -= INFLUENCE_PRICE;
       state.influenceLeft = INFLUENCE_SECONDS;
-      showNotice("🎩 Political influence bought! All businesses earn double for 1 minute.");
+      showNotice("🎩 Political influence bought! All businesses earn double for 2 minutes.");
       updateCounter(); updateEnergy(); save();
     });
 

@@ -1,0 +1,2535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coin Clicker</title>
+  <style>
+    /* ================= Page layout ================= */
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }   /* hidden elements always stay hidden */
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 30% 50%, #2b2d42 0%, #14151f 100%);
+      color: #fff;
+      user-select: none;
+    }
+
+    #game {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 30px;
+      padding: 20px;
+      min-height: calc(100vh - 56px);
+    }
+
+    #incomeView { display: flex; }
+    #incomeView[hidden], #casinoView[hidden], #investView[hidden] { display: none; }
+
+    #shop {
+      width: 420px;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.35);
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 20px;
+    }
+
+    /* On phones: coin on top, shop underneath */
+    @media (max-width: 800px) {
+      #incomeView { flex-direction: column; }
+      #game { min-height: 70vh; }
+      #shop { width: 100%; max-height: none; border-left: none; }
+    }
+
+    /* ================= Tabs ================= */
+    #settingsWrap { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
+    #settingsBtn {
+      width: 38px; height: 38px; border-radius: 50%; border: 1px solid #555566; background: transparent;
+      font-size: 18px; cursor: pointer;
+    }
+    #settingsBtn:hover { border-color: #ffd34d; background: rgba(255, 211, 77, 0.1); }
+    #settingsMenu {
+      position: absolute; right: 0; top: 46px; width: 250px; z-index: 50;
+      background: #2b2d42; border: 1px solid #555566; border-radius: 12px; padding: 8px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    }
+    #settingsMenu button {
+      display: block; width: 100%; text-align: left; background: transparent; color: #fff; border: none;
+      font: inherit; font-size: 14px; padding: 10px; border-radius: 8px; cursor: pointer;
+    }
+    #settingsMenu button:hover { background: rgba(255, 255, 255, 0.08); }
+    #settingsMenu button.danger { color: #ff8a8a; }
+    #settingsMenu .muted { padding: 6px 10px 2px; font-size: 12px; }
+    #modalBox .row { justify-content: center; gap: 10px; }
+    button.btn.dangerBtn { background: #d62828; color: #fff; }
+    button.btn.dangerBtn:hover:not(:disabled) { background: #e63939; }
+
+    #tabs {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .tab {
+      background: transparent;
+      color: #c9c9d6;
+      border: 1px solid #555566;
+      border-radius: 999px;
+      padding: 8px 20px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab.active { background: #ffd34d; color: #2b2100; border-color: #ffd34d; }
+
+    /* ================= Casino ================= */
+    #casinoView { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .wallet { display: flex; gap: 14px; flex-wrap: wrap; }
+    .wallet .stat { flex: 1; min-width: 160px; }
+    .stat .label { color: #9a9ab0; font-size: 13px; }
+    .stat .value { font-size: 30px; font-weight: 800; color: #ffd34d; }
+    .stat .value.chips { color: #7fd1ff; }
+    .moneyRow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .moneyRow input {
+      width: 190px; padding: 8px; border-radius: 8px; border: 1px solid #555566;
+      background: #1c1d2b; color: #fff; font: inherit;
+    }
+    #casinoDebt {
+      display: block; width: 100%; margin-bottom: 14px; padding: 10px;
+      background: #d62828; color: #fff; border: 2px solid #ff8a8a; border-radius: 10px;
+      font: inherit; font-weight: 800; cursor: pointer; animation: pulse 1s ease-in-out infinite;
+    }
+    #casinoDebt[hidden] { display: none; }
+    #casinoLevel .levelNum {
+      width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; font-weight: 900; color: #2b2100;
+      background: radial-gradient(circle at 35% 30%, #fff6c2, #ffd34d 55%, #c98a00);
+      box-shadow: 0 0 16px rgba(255, 211, 77, 0.45);
+    }
+    #casinoLevel .xpBar { height: 16px; background: #1c1d2b; border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
+    #casinoLevel .xpFill {
+      height: 100%; width: 0; border-radius: 999px;
+      background: linear-gradient(90deg, #7fd1ff, #b388ff);
+      transition: width 0.6s ease;
+    }
+    #casinoLevel.levelUp { animation: levelGlow 1.2s ease; }
+    @keyframes levelGlow { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 30px #ffd34d; } }
+    .gameCard { cursor: pointer; text-align: left; width: 100%; font: inherit; color: #fff; }
+    .gameCard:hover { border-color: #ffd34d; }
+
+    /* ================= Investing ================= */
+    #investView { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .levelCard { gap: 16px; justify-content: flex-start; }
+    .levelCard .levelNum {
+      width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; font-weight: 900; color: #0b2a1a;
+      background: radial-gradient(circle at 35% 30%, #d9ffe8, #5be08f 55%, #1f8a4c);
+      box-shadow: 0 0 16px rgba(91, 224, 143, 0.45);
+    }
+    .levelCard .xpBar { height: 16px; background: #1c1d2b; border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
+    .levelCard .xpFill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #5be08f, #7fd1ff); transition: width 0.6s ease; }
+    .levelCard.levelUp { animation: levelGlow 1.2s ease; }
+    .bigValue { font-size: 28px; font-weight: 800; }
+    .up { color: #5be08f; }
+    .down { color: #ff6b6b; }
+    .property {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); margin-bottom: 6px; font-size: 14px;
+    }
+    .property .grow { flex: 1; }
+    #etfHistory, .etfHist { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+    #etfHistory span, .etfHist span { font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,0.06); }
+    #investMsg { min-height: 18px; }
+    .chartBox { position: relative; margin-top: 10px; background: #15161f; border-radius: 10px; padding: 8px 8px 4px; }
+    .chartBox svg { display: block; width: 100%; height: 190px; }
+    .chartHead { display: flex; justify-content: space-between; font-size: 13px; color: #9a9ab0; padding: 0 4px 4px; }
+    .chartTip {
+      position: absolute; pointer-events: none; background: #2b2d42; border: 1px solid #555566;
+      border-radius: 6px; padding: 4px 8px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -110%);
+    }
+    .infoBox { margin-top: 6px; padding: 8px 10px; border-left: 3px solid #7fd1ff; background: rgba(127, 209, 255, 0.06); border-radius: 6px; }
+    .infoBox[hidden] { display: none; }
+    [data-info].open { color: #7fd1ff; border-color: #7fd1ff; }
+
+    /* Roulette wheel */
+    .rouletteTop { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    #wheelWrap { position: relative; width: 280px; height: 280px; }
+    #wheel {
+      width: 280px; height: 280px; border-radius: 50%; position: relative;
+      border: 8px solid #6b4a1e; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    #ball {
+      position: absolute; left: 0; top: 0; width: 14px; height: 14px; border-radius: 50%; z-index: 5;
+      background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e6e6e6 45%, #9a9a9a 100%);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+      pointer-events: none;
+    }
+    #wheel .num {
+      position: absolute; left: 50%; top: 50%; width: 20px; margin-left: -10px; margin-top: -8px;
+      text-align: center; font-size: 11px; font-weight: 800; color: #fff;
+    }
+    #wheel::after {   /* wooden middle */
+      content: ""; position: absolute; inset: 70px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #b07a3a, #5a3a14);
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.6);
+    }
+    #result { text-align: center; min-width: 180px; }
+    #resultNum {
+      width: 90px; height: 90px; margin: 0 auto 8px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px; font-weight: 900; background: #333344;
+    }
+    #history { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin-top: 8px; max-width: 220px; }
+    #history span {
+      width: 24px; height: 24px; border-radius: 50%; font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .red { background: #c62828 !important; }
+    .black { background: #1b1b1b !important; }
+    .green { background: #2e7d32 !important; }
+
+    /* Roulette betting table */
+    .chipsRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 14px 0 10px; }
+    .chip, .chipMark {
+      border-radius: 50%;
+      border: 3px dashed rgba(255, 255, 255, 0.85);
+      font: inherit; font-weight: 800; color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 0 3px rgba(0, 0, 0, 0.15);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    }
+    .chip { width: 48px; height: 48px; font-size: 12px; cursor: pointer; }
+    .chip.selected { outline: 3px solid #ffd34d; outline-offset: 3px; transform: translateY(-3px); }
+    .chipMark { width: 30px; height: 30px; font-size: 10px; pointer-events: none; border-width: 2px; }
+    .spot .chipMark { width: 26px; height: 26px; font-size: 9px; }
+
+    #tableWrap { overflow-x: auto; padding-bottom: 4px; }
+    #table {
+      display: grid;
+      grid-template-columns: 50px repeat(12, 1fr) 50px;
+      grid-auto-rows: 46px;
+      gap: 3px;
+      background: #1e5631;
+      padding: 10px;
+      border-radius: 10px;
+      min-width: 680px;
+    }
+    .cell {
+      position: relative; border: 1px solid rgba(255,255,255,0.35); border-radius: 4px;
+      color: #fff; font-weight: 800; font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cell:hover, .cell.covered { box-shadow: inset 0 0 0 3px #ffd34d; }
+    .cell.winner { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 14px #ffd34d; }
+
+    /* invisible hot-spots on the lines between numbers: split, corner, street, six line */
+    .spot {
+      position: absolute; z-index: 3; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .spot:hover::before {
+      content: ""; width: 12px; height: 12px; border-radius: 50%;
+      background: #ffd34d; box-shadow: 0 0 8px #ffd34d;
+    }
+    .spot:has(.chipMark):hover::before { display: none; }
+    .spot.winner .chipMark { outline: 3px solid #ffd34d; }
+    .spot.right  { right: -10px; top: 18%;  width: 17px; height: 64%; }    /* split with the number to the right */
+    .spot.bottom { bottom: -10px; left: 18%; width: 64%; height: 17px; }   /* split with the number below / street */
+    .spot.zsplit { height: 20%; }   /* the three splits on the zero */
+    .spot.corner { right: -11px; bottom: -11px; width: 19px; height: 19px; z-index: 4; } /* corner / six line */
+
+    /* ================= Money counter ================= */
+    #counter {
+      font-size: 56px;
+      font-weight: 800;
+      color: #ffd34d;
+      text-shadow: 0 4px 16px rgba(255, 196, 0, 0.35);
+      text-align: center;
+    }
+    #counter span { font-size: 24px; color: #c9c9d6; font-weight: 500; }
+    #perSecond { font-size: 18px; color: #9fe39f; font-weight: 600; }
+
+    /* ================= Tax debt button ================= */
+    #debt {
+      background: #d62828;
+      color: #fff;
+      border: 3px solid #ff8a8a;
+      border-radius: 14px;
+      padding: 14px 22px;
+      font: inherit;
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 0 24px rgba(255, 40, 40, 0.7);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    #debt[hidden] { display: none; }
+    #debt small { display: block; font-size: 14px; font-weight: 600; opacity: 0.9; margin-top: 4px; }
+    #debt:hover { background: #e63939; }
+    #debt.urgent { animation-duration: 0.4s; }   /* pulses faster in the last minute */
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    /* ================= Pop-up window ================= */
+    #modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #modal[hidden] { display: none; }
+    #modalBox {
+      background: #2b2d42;
+      border: 3px solid #d62828;
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(214, 40, 40, 0.6);
+    }
+    #modalBox h2 { font-size: 26px; }
+    button.btn.big { font-size: 18px; padding: 12px 24px; margin-top: 10px; }
+
+    /* ================= The golden coin ================= */
+    #coin {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      touch-action: manipulation;
+      background:
+        radial-gradient(circle at 35% 30%, #fff6c2 0%, #ffd84a 25%, #e8a800 65%, #a86f00 100%);
+      box-shadow:
+        inset 0 0 0 10px #f2b705,
+        inset 0 0 0 14px #b67c00,
+        0 12px 30px rgba(0, 0, 0, 0.5);
+      transition: transform 0.08s ease;
+    }
+    #coin:hover  { transform: scale(1.04); }
+    #coin:active { transform: scale(0.94); }
+    #coin:focus-visible { outline: 4px solid #fff; outline-offset: 6px; }
+    #coin::after {
+      content: "$";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 110px;
+      font-weight: 900;
+      color: #c98a00;
+      text-shadow: 2px 2px 0 #fff1a8, -1px -1px 0 #8a5a00;
+    }
+    #coin.blocked { animation: shake 0.2s; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    .plus {
+      position: fixed;
+      pointer-events: none;
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffd34d;
+      animation: floatUp 0.8s ease-out forwards;
+    }
+    @keyframes floatUp {
+      from { opacity: 1; transform: translate(-50%, 0); }
+      to   { opacity: 0; transform: translate(-50%, -80px); }
+    }
+    #hint { color: #8d8da3; font-size: 14px; height: 18px; }
+
+    /* ================= Shop ================= */
+    h2 { margin: 0 0 14px; font-size: 22px; }
+    h3 { margin: 0; font-size: 18px; }
+    h4 { margin: 14px 0 8px; font-size: 14px; color: #c9c9d6; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .muted { color: #9a9ab0; font-size: 13px; }
+    .income { color: #9fe39f; font-weight: 700; }
+    .flash { color: #ff8a8a; font-weight: 700; font-size: 13px; height: 16px; }
+
+    button.btn {
+      background: #ffd34d;
+      color: #2b2100;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button.btn:hover:not(:disabled) { background: #ffe07a; }
+    button.btn:disabled { background: #555566; color: #9a9ab0; cursor: not-allowed; }
+    button.btn.ghost { background: transparent; color: #c9c9d6; border: 1px solid #555566; }
+    button.btn.small { padding: 4px 8px; font-size: 12px; }
+
+    /* choice cards for accountant / HR / candidates */
+    .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .choice {
+      text-align: left;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 10px;
+      color: #fff;
+      cursor: pointer;
+      font: inherit;
+    }
+    .choice:hover:not(:disabled) { border-color: #ffd34d; background: rgba(255, 211, 77, 0.08); }
+    .choice:disabled { opacity: 0.45; cursor: not-allowed; }
+    .choice b { display: block; margin-bottom: 4px; }
+    .choice small { color: #b5b5c8; }
+
+    .staff { font-size: 14px; margin: 4px 0; }
+    .groupHead { background: rgba(255, 211, 77, 0.07); border-color: rgba(255, 211, 77, 0.35); padding: 10px 14px; }
+
+    .worker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    .worker .name { flex: 1; }
+    .worker .status { width: 90px; text-align: right; font-size: 12px; }
+    .worker .earn { width: 52px; text-align: right; color: #9fe39f; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- ===== Tabs to switch views ===== -->
+  <nav id="tabs">
+    <div id="settingsWrap">
+      <button id="settingsBtn" title="Settings" aria-label="Settings">⚙️</button>
+      <div id="settingsMenu" hidden>
+        <button data-setting="save">💾 Save game</button>
+        <button data-setting="download">⬇️ Download progress file</button>
+        <button data-setting="load">⬆️ Load progress file</button>
+        <button data-setting="reset" class="danger">🗑️ Reset game</button>
+        <div class="muted" id="settingsNote">The game also saves itself every second.</div>
+      </div>
+      <input type="file" id="loadFile" accept=".json,application/json" hidden>
+    </div>
+    <button class="tab active" data-view="income">💰 Income</button>
+    <button class="tab" data-view="casino">🎰 Casino</button>
+    <button class="tab" data-view="invest">📈 Investing</button>
+  </nav>
+
+  <div id="incomeView">
+  <!-- ===== Left side: the coin ===== -->
+  <main id="game">
+    <button id="debt" hidden></button>
+    <div id="counter">0 <span>bcoin</span><div id="perSecond">+0 / sec</div></div>
+    <button id="coin" aria-label="Click the coin to earn money"></button>
+    <div id="hint"></div>
+  </main>
+
+  <!-- ===== Right side: the business shop (filled in by JavaScript) ===== -->
+  <aside id="shop"></aside>
+  </div>
+
+  <!-- ===== Casino (filled in by JavaScript) ===== -->
+  <section id="casinoView" hidden>
+    <button id="casinoDebt" hidden></button>
+    <div class="card row" id="casinoLevel" style="gap:16px; justify-content:flex-start">
+      <div class="levelNum" id="levelNum">1</div>
+      <div style="flex:1">
+        <div class="row"><b>🎲 Gambler level <span id="levelText">1</span></b>
+          <span class="muted" id="cashbackText">Cashback 0.1% on lost bets</span></div>
+        <div class="xpBar"><div class="xpFill" id="xpFill"></div></div>
+        <div class="muted" id="xpText">0 / 80,000 XP</div>
+      </div>
+    </div>
+    <div class="card wallet">
+      <div class="stat"><div class="label">💰 Your money</div><div class="value" id="casinoMoney">0</div></div>
+      <div class="stat"><div class="label">🎟️ Casino chips</div><div class="value chips" id="casinoChips">0</div></div>
+    </div>
+    <div class="card">
+      <div class="muted">Move money into the casino to play. You can add more at any time.</div>
+      <div class="moneyRow">
+        <input id="buyAmount" type="number" min="1" placeholder="Amount">
+        <button class="btn ghost small" data-pct="0.1">10%</button>
+        <button class="btn ghost small" data-pct="0.25">25%</button>
+        <button class="btn ghost small" data-pct="0.5">50%</button>
+        <button class="btn ghost small" data-pct="1">All</button>
+        <button class="btn" id="buyIn">Add to casino</button>
+        <button class="btn ghost" id="cashOut">Cash out all chips</button>
+      </div>
+    </div>
+    <div id="casinoGame"></div>
+  </section>
+
+  <!-- ===== Investing ===== -->
+  <section id="investView" hidden>
+    <div class="card row levelCard" id="investLevel">
+      <div class="levelNum" id="investLevelNum">1</div>
+      <div style="flex:1">
+        <div class="row"><b>📈 Investor level <span id="investLevelText">1</span></b>
+          <span class="muted" id="investFeeText"></span></div>
+        <div class="xpBar"><div class="xpFill" id="investXpFill"></div></div>
+        <div class="muted" id="investXpText"></div>
+      </div>
+    </div>
+
+    <div class="card wallet">
+      <div class="stat"><div class="label">💰 Your money</div><div class="value" id="investMoney">0</div></div>
+      <div class="stat"><div class="label">🏠 Real estate</div><div class="value chips" id="reTotal">0</div></div>
+      <div class="stat"><div class="label">📊 ETF</div><div class="value chips" id="etfTotal">0</div></div>
+    </div>
+    <div id="investMsg" class="flash"></div>
+
+    <!-- Real estate -->
+    <div class="card">
+      <div class="row"><h3>🏠 Real estate</h3>
+        <button class="btn ghost small" data-info="re">ℹ️ Info</button></div>
+      <div class="muted infoBox" id="info-re" hidden>Safe, steady income: earns 1.2% of its value as rent every 45 seconds (about +80% per hour, paid to your money).
+        Locked for 20 minutes after buying, then sell any time with no fee.
+        Min. 50,000. ⚠️ Each second there is a small 1 in 21,600 chance (about once every 6 hours) of a market crash: all properties lose 70% of their value.</div>
+      <div class="moneyRow">
+        <input id="reAmount" type="number" min="50000" placeholder="Amount (min 50,000)">
+        <button class="btn ghost small" data-invpct="re" data-pct="0.25">25%</button>
+        <button class="btn ghost small" data-invpct="re" data-pct="0.5">50%</button>
+        <button class="btn ghost small" data-invpct="re" data-pct="1">All</button>
+        <button class="btn" id="reBuy">Buy property</button>
+      </div>
+      <div id="reList" style="margin-top:10px"></div>
+    </div>
+
+    <!-- ETF -->
+    <div class="card">
+      <div class="row"><h3>📊 Stock market ETF</h3>
+        <button class="btn ghost small" data-info="etf">ℹ️ Info</button></div>
+      <div class="muted infoBox" id="info-etf" hidden>Every 10 seconds the market moves: 1 in 10 chance of −4%, 1 in 10 chance of +4%, otherwise 50/50 between +1.5% and −1%.
+        Min. 1,000 per investment. Cash-out fee: <span id="etfFeeInline"></span> (lower with every investor level).</div>
+      <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
+        <div><div class="muted">Your ETF</div><div class="bigValue" id="etfValue">0</div></div>
+        <div><div class="muted">Last move</div><div class="bigValue" id="etfLast">–</div></div>
+        <div><div class="muted">Next move in</div><div class="bigValue" id="etfTimer">10s</div></div>
+      </div>
+      <div class="chartBox" id="etfChart"></div>
+      <div id="etfHistory"></div>
+      <div class="moneyRow">
+        <input id="etfAmount" type="number" min="1000" placeholder="Amount (min 1,000)">
+        <button class="btn ghost small" data-invpct="etf" data-pct="0.25">25%</button>
+        <button class="btn ghost small" data-invpct="etf" data-pct="0.5">50%</button>
+        <button class="btn ghost small" data-invpct="etf" data-pct="1">All</button>
+        <button class="btn" id="etfBuy">Invest</button>
+      </div>
+      <div class="moneyRow">
+        <input id="etfSellAmount" type="number" min="1" placeholder="Cash-out amount">
+        <button class="btn ghost" id="etfSell">Cash out</button>
+        <button class="btn ghost" id="etfSellAll">Cash out all</button>
+        <span class="muted" id="etfSellPreview"></span>
+      </div>
+    </div>
+
+    <!-- Broker ETF (needs a Brokerage Firm) -->
+    <div class="card" id="petfCard">
+      <div class="row"><h3>🏦 Broker ETF</h3>
+        <button class="btn ghost small" data-info="petf">ℹ️ Info</button></div>
+      <div class="muted infoBox" id="info-petf" hidden>Only for owners of a Brokerage Firm. Works like the normal ETF, with better wins:
+        every 10 seconds, 1 in 10 chance of −4%, 1 in 10 chance of +5%, otherwise 50/50 between +2% and −1%.
+        <b>No cash-out fee.</b> One slot: you invest once (min. 1,000, max. 10,000,000), and cash out everything before investing again. Your investment can still grow past 10M.</div>
+      <div id="petfLocked" class="muted" style="margin-top:8px">🔒 Buy a 🏦 Brokerage Firm (Income tab, needs investor level 10) to unlock.</div>
+      <div id="petfBody" hidden>
+        <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
+          <div><div class="muted">Your Broker ETF</div><div class="bigValue" id="petfValue">0</div></div>
+          <div><div class="muted">Last move</div><div class="bigValue" id="petfLast">–</div></div>
+          <div><div class="muted">Next move in</div><div class="bigValue" id="petfTimer">–</div></div>
+        </div>
+        <div class="chartBox" id="petfChart"></div>
+        <div id="petfHistory" class="etfHist"></div>
+        <div class="moneyRow" id="petfBuyRow">
+          <input id="petfAmount" type="number" min="1000" max="10000000" placeholder="1,000 – 10,000,000">
+          <button class="btn ghost small" data-invpct="petf" data-pct="0.25">25%</button>
+          <button class="btn ghost small" data-invpct="petf" data-pct="0.5">50%</button>
+          <button class="btn ghost small" data-invpct="petf" data-pct="1">All</button>
+          <button class="btn" id="petfBuy">Invest</button>
+        </div>
+        <div class="moneyRow" id="petfSellRow">
+          <button class="btn ghost" id="petfSell">Cash out all (no fee)</button>
+          <span class="muted">One slot: cash out to invest again.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Pop-up window (tax payment / game over) ===== -->
+  <div id="modal" hidden><div id="modalBox"></div></div>
+
+  <script>
+    /* =====================================================================
+       SETTINGS: change these numbers to balance the game
+       ===================================================================== */
+    const MONEY_PER_CLICK = 1;
+    const MAX_CLICKS_PER_SECOND = 10;
+    const LAZY_CHANCE = 0.3;            // 30% chance a lazy worker earns nothing that second
+    const CRIMINAL_CHANCE = 1 / 20;     // 1 in 20 chance per second to double company income
+    const EMBEZZLER_BONUS = 0.30;       // +30% company income
+    const EMBEZZLER_CHANCE = 1 / 100;   // 1 in 100 chance per second that he steals...
+    const EMBEZZLER_STEAL = 0.10;       // ...10% of what the company earned in the last 60 seconds
+    const GAMBLE_EVERY = 10;            // gamblers (accountant and worker) roll every 10 seconds
+    const NIGHT_OWL_PHASE = 10;         // 10 seconds double, then 10 seconds half
+    const HARD_WORKER_BONUS = 0.50;     // +50% income
+    const BURNOUT_CHANCE = 0.02;        // 2% chance per second to burn out...
+    const BURNOUT_SECONDS = 10;         // ...and earn nothing for 10 seconds
+    const COPYCAT_EVERY = 20;           // copycat picks a new trait to copy every 20 seconds
+
+    // Tax inspection event
+    const TAX_CHANCE = 1 / 1000;        // checked every second, even while you already owe taxes
+    const TAX_FORCED_AFTER = 1200;      // happens for sure if it hasn't for 1200 seconds
+    const TAX_RATE = 0.20;              // 20% of...
+    const TAX_LOOKBACK = 300;           // ...everything you earned in the last 300 seconds (5 min)
+    const TAX_TIME_TO_PAY = 300;        // 5 minutes to pay each tax bill
+    const TAX_LATE_PENALTY = 0.50;      // can't pay in time: bill +50% and 5 more minutes. Miss again = game over
+
+    // Business types. To add a new one later, copy the car wash entry.
+    const BUSINESS_TYPES = [
+      {
+        id: "carwash",
+        name: "Car Wash",
+        emoji: "🚗",
+        price: 1000,
+        maxOwned: 3,        // how many of this business you can own
+        priceMultiplier: 2, // each extra one costs double: 1000, 2000, 4000
+        maxEmployees: 10,   // includes the accountant and HR, so 8 workers
+        hireBaseCost: 0,    // first worker is free...
+        hireCostStep: 100,  // ...then each next worker costs 100 more (100, 200, 300...)
+        minIncome: 1,       // each candidate earns a random whole number
+        maxIncome: 3,     // between minIncome and maxIncome per second
+        refreshBaseCost: 10,  // first "new options" costs this...
+        refreshCostStep: 10,  // ...and every refresh after that costs this much more
+      },
+      {
+        id: "repair",
+        name: "Car Repair Shop",
+        emoji: "🔧",
+        price: 10000,       // 10k, then 20k, then 40k
+        maxOwned: 3,
+        priceMultiplier: 2,
+        // Unlock: have 20 workers across your car washes
+        unlock: () => carWashWorkers() >= 20 ? 3 : 0,
+        unlockText: () => `Unlocks when you have 20 car wash workers (you have ${carWashWorkers()})`,
+        maxEmployees: 12,   // includes the accountant and HR, so 10 workers
+        hireBaseCost: 0,    // first worker is free...
+        hireCostStep: 150,  // ...then 150, 300, 450...
+        minIncome: 3,
+        maxIncome: 6,
+        refreshBaseCost: 10,
+        refreshCostStep: 10,
+      },
+      {
+        id: "salon",
+        name: "Car Salon",
+        emoji: "🚘",
+        price: 100000,      // 100k, then 200k, then 400k
+        maxOwned: 3,
+        priceMultiplier: 2,
+        // Unlock: own all 3 car washes and all 3 repair shops
+        unlock: () => (ownedOf("carwash") >= 3 && ownedOf("repair") >= 3) ? 3 : 0,
+        unlockText: () => `Unlocks when you own all 3 car washes (${ownedOf("carwash")}/3) and all 3 repair shops (${ownedOf("repair")}/3)`,
+        maxEmployees: 10,   // includes the accountant and HR, so 8 workers
+        hireBaseCost: 0,    // first worker is free...
+        hireCostStep: 200,  // ...then 200, 400, 600...
+        minIncome: 5,
+        maxIncome: 8,
+        refreshBaseCost: 10,
+        refreshCostStep: 10,
+        perk: "Each Car Salon gives all car washes and repair shops +10% income",
+      },
+      {
+        id: "casino",
+        name: "Casino",
+        emoji: "🎰",
+        price: 1000000,     // 1M, then 2M, 4M, 8M...
+        maxOwned: 10,       // gambler level 5, 15, 25 ... 95 = up to 10 casinos
+        priceMultiplier: 2,
+        // Unlock: first casino at gambler level 5, then one more every 10 levels
+        unlock: () => {
+          const lvl = levelInfo(state.casinoXp).level;
+          return lvl < 5 ? 0 : 1 + Math.floor((lvl - 5) / 10);
+        },
+        unlockText: (owned) => `Casino #${owned + 1} unlocks at gambler level ${5 + owned * 10} (play in the 🎰 Casino tab)`,
+        maxEmployees: 15,   // includes the accountant and HR, so 13 workers
+        hireBaseCost: 0,    // first worker is free...
+        hireCostStep: 250,  // ...then 250, 500, 750...
+        minIncome: 5,
+        maxIncome: 10,
+        refreshBaseCost: 10,
+        refreshCostStep: 10,
+      },
+      {
+        id: "hotel",
+        name: "Hotel",
+        emoji: "🏨",
+        price: 2500000,     // 2.5M, then 5M, 10M...
+        maxOwned: 10,       // investor level 5, 15, 25 ... 95 = up to 10 hotels
+        priceMultiplier: 2,
+        // Unlock: first hotel at investor level 5, then one more every 10 levels
+        unlock: () => {
+          const lvl = levelInfo((state.invest && state.invest.xp) || 0).level;
+          return lvl < 5 ? 0 : 1 + Math.floor((lvl - 5) / 10);
+        },
+        unlockText: (owned) => `Hotel #${owned + 1} unlocks at investor level ${5 + owned * 10} (invest in the 📈 Investing tab)`,
+        maxEmployees: 18,   // includes the accountant and HR, so 16 workers
+        hireBaseCost: 0,    // first worker is free...
+        hireCostStep: 350,  // ...then 350, 700, 1,050...
+        minIncome: 9,
+        maxIncome: 12,
+        refreshBaseCost: 10,
+        refreshCostStep: 10,
+      },
+      {
+        id: "broker",
+        name: "Brokerage Firm",
+        emoji: "🏦",
+        price: 5000000,     // 5M
+        maxOwned: 1,        // you can only have one
+        priceMultiplier: 1,
+        // Unlock: investor level 10
+        unlock: () => levelInfo((state.invest && state.invest.xp) || 0).level >= 10 ? 1 : 0,
+        unlockText: () => `Unlocks at investor level 10 (invest in the 📈 Investing tab)`,
+        maxEmployees: 20,   // includes the accountant and HR, so 18 workers
+        hireBaseCost: 0,    // first worker is free...
+        hireCostStep: 500,  // ...then 500, 1,000, 1,500...
+        minIncome: 12,
+        maxIncome: 15,
+        refreshBaseCost: 10,
+        refreshCostStep: 10,
+        perk: "Unlocks the Broker ETF in the 📈 Investing tab: no fee and bigger wins",
+      },
+    ];
+
+    const ACCOUNTANTS = {
+      numbers:  { name: "Good with numbers", emoji: "🧮", desc: "Company profit +5%" },
+      criminal: { name: "Criminal",          emoji: "🕵️", desc: "1 in 20 chance each second to double company income" },
+      embezzler:{ name: "Embezzler",         emoji: "🦹", desc: "Company income +30%, but a 1 in 100 chance each second he steals 10% of the last minute's earnings" },
+      gambler:  { name: "Gambler",           emoji: "🎰", desc: "Every 10 seconds he bets that second's income: 50/50 to double it or lose it" },
+    };
+
+    const HR_OPTIONS = {
+      motivator:  { name: "Motivator",         emoji: "📣", desc: "All workers earn +10%" },
+      friendship: { name: "Friendship expert", emoji: "💞", desc: "Candidates are twice as likely to have the Friendship trait" },
+      talent:     { name: "Talent acquisition specialist", emoji: "🎯", desc: "Hiring workers and refreshing options cost 30% less" },
+    };
+
+    // chance = how likely a new candidate gets this trait
+    // Every candidate gets exactly one trait, so the chances add up to 1.
+    const TRAITS = {
+      friendship: { name: "Friendship",  emoji: "🤝", chance: 0.16, desc: "+20% for every Friendship worker in the company" },
+      leader:     { name: "Leader",      emoji: "⭐", chance: 0.12, desc: "Doubles the income of one random co-worker each second" },
+      lazy:       { name: "Lazy",        emoji: "😴", chance: 0.16, desc: "30% chance to earn nothing each second" },
+      bully:      { name: "Bully",       emoji: "😠", chance: 0.12, desc: "Earns double, but one random co-worker earns nothing" },
+      nightowl:   { name: "Night owl",   emoji: "🦉", chance: 0.12, desc: "10 seconds double income, then 10 seconds half income" },
+      hardworker: { name: "Hard worker", emoji: "💪", chance: 0.12, desc: "Earns +50%, but sometimes burns out for 10 seconds" },
+      mentor:     { name: "Mentor",      emoji: "🧑‍🏫", chance: 0.08, desc: "The lowest-earning co-worker earns double" },
+      copycat:    { name: "Copycat",     emoji: "🔁", chance: 0.06, desc: "Copies the trait of a random co-worker every 20 seconds" },
+      gambler:    { name: "Gambler",     emoji: "🎲", chance: 0.06, desc: "Every 10 seconds: 50/50 to earn double or nothing for the next 10 seconds" },
+      // ----- Car repair shop traits -----
+      mechanic:    { name: "Mechanic",    emoji: "🛠️", chance: 0.10, onlyFor: ["repair"], desc: "+10% income for every car wash you own" },
+      overcharger: { name: "Overcharger", emoji: "🧾", chance: 0.10, onlyFor: ["repair"], desc: "+80% income, but a 1 in 50 chance each second of a complaint: nothing for 15 seconds" },
+      apprentice:  { name: "Apprentice",  emoji: "🎓", chance: 0.08, onlyFor: ["repair"], desc: "Starts at 50% income, +5% every minute, up to 200%" },
+      // ----- Car salon traits -----
+      promoter:  { name: "Promoter",         emoji: "📢", chance: 0.12, onlyFor: ["salon"], desc: "Every car wash earns +2% (stacks for each Promoter)" },
+      // ----- Hotel traits -----
+      concierge: { name: "Concierge",        emoji: "🛎️", chance: 0.08, onlyFor: ["hotel"], desc: "Doubles the income of the 2 best-paid co-workers" },
+      vip:       { name: "VIP guest magnet", emoji: "🧳", chance: 0.08, onlyFor: ["hotel"], desc: "Each second a 1 in 30 chance of a ×20 tip" },
+      cleaner:   { name: "Cleaner",          emoji: "🧹", chance: 0.10, onlyFor: ["hotel"], desc: "Stops one Lazy worker from slacking each second" },
+      // ----- Casino-only traits (onlyFor = which businesses can get them) -----
+      mastergambler: { name: "Master gambler", emoji: "🃏", chance: 0.08, onlyFor: ["casino"], desc: "Every 10 seconds: 70% chance to earn double, 30% nothing, for the next 10 seconds" },
+      quickhands:    { name: "Quick hands",    emoji: "✋", chance: 0.10, onlyFor: ["casino"], desc: "Every 5 seconds earns double" },
+      scammer:       { name: "Scammer",        emoji: "🤑", chance: 0.08, onlyFor: ["casino"], desc: "Each second: 1 in 5 chance of triple income, 1 in 10 chance of losing triple" },
+      normal:     { name: "No trait",   emoji: "🙂", chance: 0,    desc: "Just does the job" }, // only for old saves
+    };
+
+    const FIRST_NAMES = ["Alex", "Sam", "Maria", "Jonas", "Lena", "Omar", "Kate", "Igor", "Nina", "Tom",
+                         "Ella", "Max", "Sofia", "Leo", "Mia", "Dan", "Ava", "Ivan", "Zoe", "Ben"];
+
+    /* =====================================================================
+       GAME STATE (everything that gets saved)
+       ===================================================================== */
+    let state = {
+      money: 0,
+      companies: [],   // { typeId, accountant, hr, workers: [{id, name, trait}], candidates }
+      nextId: 1,
+      earnedHistory: [],       // money earned each second (clicks + companies), last 5 minutes
+      secondsSinceTax: 0,      // seconds since the last tax inspection
+      taxDebts: [],            // tax bills: { id, amount, timeLeft, extended }
+      pendingTaxId: null,      // bill waiting for you to confirm payment (game is paused)
+      gameOver: false,
+    };
+
+    // Load the save (wrapped in try/catch because browser storage can be blocked)
+    try {
+      const saved = localStorage.getItem("coinClickerSave");
+      if (saved) {
+        state = Object.assign(state, JSON.parse(saved));
+      } else {
+        // carry over money from the first version of the game
+        state.money = parseInt(localStorage.getItem("coinClickerMoney"), 10) || 0;
+      }
+    } catch (e) {}
+
+    // Fix up saves from the previous version: old workers had no income roll
+    state.companies.forEach(c => {
+      c.workers.forEach(w => { if (!w.base) w.base = 3; });
+      if (c.candidates && c.candidates.some(x => !x.base)) c.candidates = null;
+    });
+
+    // Old saves had a single tax debt
+    if (state.taxDebt > 0) {
+      state.taxDebts = [{ id: state.nextId++, amount: state.taxDebt, timeLeft: Math.min(state.taxTimeLeft, 300), extended: false }];
+    }
+    delete state.taxDebt; delete state.taxTimeLeft;
+
+    let stopSaving = false;   // set while resetting / loading, so the old game isn't saved again
+    function save() {
+      if (stopSaving) return;
+      try { localStorage.setItem("coinClickerSave", JSON.stringify(state)); } catch (e) {}
+    }
+
+    /* =====================================================================
+       HELPERS
+       ===================================================================== */
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => Math.floor(n).toLocaleString();
+    const randomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const typeOf = (company) => BUSINESS_TYPES.find(t => t.id === company.typeId);
+
+    // Accountant and HR count as 2 of the max employees
+    const maxWorkers = (company) => typeOf(company).maxEmployees - 2;
+
+    const ownedOf = (typeId) => state.companies.filter(c => c.typeId === typeId).length;
+    const carWashWorkers = () => state.companies
+      .filter(c => c.typeId === "carwash").reduce((a, c) => a + c.workers.length, 0);
+
+    // How many of this business you are allowed to own right now
+    const allowedToOwn = (t) => Math.min(t.maxOwned, t.unlock ? t.unlock() : t.maxOwned);
+
+    // Price of the next business of this type: 1000, then 2000, then 4000
+    function businessPrice(type) {
+      const owned = state.companies.filter(c => c.typeId === type.id).length;
+      return type.price * Math.pow(type.priceMultiplier || 1, owned);
+    }
+
+    function hireCost(company) {
+      const t = typeOf(company);
+      let cost = t.hireBaseCost + t.hireCostStep * company.workers.length;
+      return applyTalentDiscount(company, cost);
+    }
+
+    // Pick a random trait using each trait's chance.
+    // The Friendship expert doubles the Friendship chance; other traits shrink to make room.
+    function rollTrait(company) {
+      // Only traits this business can have, scaled so the chances add up to 1
+      const chances = {};
+      for (const key in TRAITS) {
+        const t = TRAITS[key];
+        if (t.onlyFor && !t.onlyFor.includes(company.typeId)) continue;
+        chances[key] = t.chance;
+      }
+      const scale = (sum) => { for (const k in chances) chances[k] /= sum; };
+      scale(Object.values(chances).reduce((a, b) => a + b, 0));
+
+      if (company.hr === "friendship") {
+        const oldF = chances.friendship;
+        const newF = Math.min(oldF * 2, 1);
+        const shrink = (1 - newF) / (1 - oldF);
+        for (const key in chances) chances[key] = key === "friendship" ? newF : chances[key] * shrink;
+      }
+
+      let roll = Math.random();
+      for (const key in chances) {
+        if (roll < chances[key]) return key;
+        roll -= chances[key];
+      }
+      return "bully"; // only reached through tiny rounding errors
+    }
+
+    // Random whole number from min to max (both included)
+    const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+    function makeCandidates(company) {
+      const t = typeOf(company);
+      const list = [];
+      for (let i = 0; i < 3; i++) {
+        list.push({
+          id: state.nextId++,
+          name: randomItem(FIRST_NAMES),
+          trait: rollTrait(company),
+          base: randomInt(t.minIncome, t.maxIncome),
+        });
+      }
+      return list;
+    }
+
+    // 10, then 20, then 30... grows with every refresh
+    function refreshCost(company) {
+      const t = typeOf(company);
+      return applyTalentDiscount(company, t.refreshBaseCost + t.refreshCostStep * (company.refreshes || 0));
+    }
+
+    // Talent acquisition specialist: hiring and refreshing cost 30% less
+    const TALENT_DISCOUNT = 0.30;
+    function applyTalentDiscount(company, cost) {
+      if (company.hr === "talent") cost *= 1 - TALENT_DISCOUNT;
+      return Math.round(cost);
+    }
+
+    /* =====================================================================
+       INCOME: runs once per second for each company
+       Order: Copycats pick a trait -> base -> Motivator, Friendship, Bully, Hard worker, Night owl
+              -> Mentor -> Leader -> Lazy, Burnout, Gambler, Bully victims (these set income to 0)
+              -> sum -> Accountant
+       ===================================================================== */
+
+    // The trait a worker is acting as right now (a Copycat acts as whatever it copied)
+    function activeTrait(w) {
+      return w.trait === "copycat" ? (w.copied || "normal") : w.trait;
+    }
+
+    function runCompany(company) {
+      const result = { total: 0, perWorker: [], status: [], flash: "" };
+      const workers = company.workers;
+
+      // The company only works once the accountant and HR are chosen
+      if (!company.accountant || !company.hr || workers.length === 0) return result;
+
+      const tick = company.ticks = (company.ticks || 0) + 1;   // seconds this company has been running
+
+      // picks a random co-worker that is not worker i (or -1 if there is none)
+      const randomOther = (i, filter = () => true) => {
+        const others = workers.map((_, j) => j).filter(j => j !== i && filter(workers[j]));
+        return others.length ? randomItem(others) : -1;
+      };
+
+      // Copycats pick someone to copy (never another Copycat)
+      workers.forEach((w, i) => {
+        if (w.trait !== "copycat") { delete w.copied; return; }
+        if (!w.copied || tick % COPYCAT_EVERY === 0) {
+          const j = randomOther(i, other => other.trait !== "copycat");
+          w.copied = j >= 0 ? workers[j].trait : null;
+        }
+      });
+
+      const traits = workers.map(activeTrait);
+      const status = workers.map(() => "");
+      const friendCount = traits.filter(t => t === "friendship").length;
+      const owlDay = Math.floor((tick - 1) / NIGHT_OWL_PHASE) % 2 === 0;  // true = double phase
+
+      const earn = workers.map((w, i) => {
+        const t = traits[i];
+        let v = w.base;
+        if (company.hr === "motivator") v *= 1.10;
+        if (t === "friendship") v *= 1 + 0.20 * friendCount;
+        if (t === "bully") v *= 2;
+        if (t === "hardworker") v *= 1 + HARD_WORKER_BONUS;
+        if (t === "nightowl") { v *= owlDay ? 2 : 0.5; status[i] = owlDay ? "🦉 awake" : "🦉 sleepy"; }
+        if (t === "mechanic") v *= 1 + 0.10 * state.companies.filter(c => c.typeId === "carwash").length;
+        if (t === "overcharger") v *= 1.80;
+        w.age = (w.age || 0) + 1;   // seconds this worker has worked
+        if (t === "apprentice") {
+          const skill = Math.min(2, 0.5 + 0.05 * Math.floor(w.age / 60));
+          v *= skill;
+          status[i] = "🎓 " + Math.round(skill * 100) + "%";
+        }
+        return v;
+      });
+
+      // Mentors double the lowest-earning co-worker
+      traits.forEach((t, i) => {
+        if (t !== "mentor") return;
+        let lowest = -1;
+        workers.forEach((_, j) => { if (j !== i && (lowest < 0 || earn[j] < earn[lowest])) lowest = j; });
+        if (lowest >= 0) { earn[lowest] *= 2; status[lowest] = "🧑‍🏫 mentored"; }
+      });
+
+      // Concierges double the 2 best-paid co-workers
+      traits.forEach((t, i) => {
+        if (t !== "concierge") return;
+        const best = workers.map((_, j) => j).filter(j => j !== i)
+          .sort((a, b) => earn[b] - earn[a]).slice(0, 2);
+        best.forEach(j => { earn[j] *= 2; status[j] = "🛎️ served"; });
+      });
+
+      // Leaders double one random co-worker
+      traits.forEach((t, i) => {
+        if (t !== "leader") return;
+        const j = randomOther(i);
+        if (j >= 0) { earn[j] *= 2; status[j] = "⭐ boosted"; }
+      });
+
+      // Each Cleaner can stop one Lazy worker from slacking this second
+      let cleanersFree = traits.filter(t => t === "cleaner").length;
+
+      // Things that make a worker earn nothing
+      workers.forEach((w, i) => {
+        const t = traits[i];
+
+        if (t === "lazy" && Math.random() < LAZY_CHANCE) {
+          if (cleanersFree > 0) { cleanersFree--; status[i] = "🧹 kept busy"; }
+          else { earn[i] = 0; status[i] = "😴 slacking"; }
+        }
+
+        if (t === "vip" && Math.random() < 1 / 30) { earn[i] *= 20; status[i] = "🧳 VIP tip!"; }
+
+        if (t === "hardworker") {
+          if (!w.burnout && Math.random() < BURNOUT_CHANCE) w.burnout = BURNOUT_SECONDS;
+          if (w.burnout) { earn[i] = 0; status[i] = "🥵 burnt out"; w.burnout--; }
+        } else {
+          delete w.burnout;
+        }
+
+        if (t === "gambler" || t === "mastergambler") {
+          const winChance = t === "mastergambler" ? 0.7 : 0.5;
+          const icon = TRAITS[t].emoji;
+          if (!w.luck || tick % GAMBLE_EVERY === 1) w.luck = Math.random() < winChance ? "win" : "lose";
+          if (w.luck === "win") { earn[i] *= 2; status[i] = icon + " winning"; }
+          else { earn[i] = 0; status[i] = icon + " losing"; }
+        } else {
+          delete w.luck;
+        }
+
+        if (t === "overcharger") {
+          if (!w.complaint && Math.random() < 1 / 50) w.complaint = 15;
+          if (w.complaint) { earn[i] = 0; status[i] = "😡 complaint"; w.complaint--; }
+        } else {
+          delete w.complaint;
+        }
+
+        if (t === "quickhands" && tick % 5 === 0) { earn[i] *= 2; status[i] = "✋ quick!"; }
+
+        if (t === "scammer") {
+          const r = Math.random();
+          if (r < 0.2) { earn[i] *= 3; status[i] = "🤑 scammed!"; }
+          else if (r < 0.3) { earn[i] *= -3; status[i] = "🚔 caught!"; }
+        }
+      });
+
+      // Bullies stop one random co-worker from earning
+      traits.forEach((t, i) => {
+        if (t !== "bully") return;
+        const j = randomOther(i);
+        if (j >= 0) { earn[j] = 0; status[j] = "😢 bullied"; }
+      });
+
+      let total = earn.reduce((a, b) => a + b, 0);
+
+      // Car salons boost the car businesses
+      if (company.typeId === "carwash" || company.typeId === "repair") {
+        const salons = state.companies.filter(c => c.typeId === "salon").length;
+        total *= 1 + 0.10 * salons;
+      }
+      if (company.typeId === "carwash") {
+        const promoters = state.companies.filter(c => c.typeId === "salon")
+          .reduce((a, c) => a + c.workers.filter(w => activeTrait(w) === "promoter").length, 0);
+        total *= 1 + 0.02 * promoters;
+      }
+
+      // ----- Accountant -----
+      const acc = company.accountant;
+      if (acc === "numbers") total *= 1.05;
+
+      if (acc === "criminal" && Math.random() < CRIMINAL_CHANCE) {
+        total *= 2;
+        result.flash = "🕵️ Criminal accounting: income doubled!";
+      }
+
+      if (acc === "embezzler") total *= 1 + EMBEZZLER_BONUS;
+
+      if (acc === "gambler" && tick % GAMBLE_EVERY === 0) {
+        if (Math.random() < 0.5) { total *= 2; result.flash = "🎰 The gamble paid off: income doubled!"; }
+        else { result.flash = "🎰 Lost the bet: " + total.toFixed(1) + " gone!"; total = 0; }
+      }
+
+      // Remember the last 60 seconds of earnings (for the Embezzler)
+      company.history = (company.history || []).concat(total).slice(-60);
+
+      if (acc === "embezzler" && Math.random() < EMBEZZLER_CHANCE) {
+        const stolen = EMBEZZLER_STEAL * company.history.reduce((a, b) => a + b, 0);
+        total -= stolen;
+        result.flash = "🦹 The embezzler stole " + fmt(stolen) + "!";
+      }
+
+      result.total = total;
+      result.perWorker = earn;
+      result.status = status;
+      return result;
+    }
+
+    /* =====================================================================
+       DRAWING THE SHOP
+       render() rebuilds the shop when something changes (buy, hire, fire).
+       updateLive() only changes numbers, so buttons keep working while you click.
+       ===================================================================== */
+    function render() {
+      let html = "<h2>🏢 Businesses</h2>";
+
+      // One owned company as a card
+      const companyCard = (c, ci) => {
+        let html = "";
+        const t = typeOf(c);
+        // Number them: Car Wash #1, #2, #3 (only when you can own more than one)
+        const number = state.companies.slice(0, ci + 1).filter(x => x.typeId === c.typeId).length;
+        const title = t.maxOwned > 1 ? `${t.name} #${number}` : t.name;
+        html += `<div class="card">
+          <div class="row">
+            <h3>${t.emoji} ${title}</h3>
+            <span class="row">
+              <span class="income" id="c-income-${ci}">+0 / sec</span>
+              ${c.accountant && c.hr
+                ? `<button class="btn ghost small" data-action="toggle" data-company="${ci}"
+                     title="${c.collapsed ? "Show workers" : "Hide workers"}">${c.collapsed ? "▸ Show" : "▾ Hide"}</button>`
+                : ""}
+            </span>
+          </div>
+          <div class="flash" id="c-flash-${ci}"></div>`;
+
+        // Step 1: choose the accountant
+        if (!c.accountant) {
+          html += `<h4>Hire your accountant</h4><div class="choices">`;
+          for (const key in ACCOUNTANTS) {
+            const a = ACCOUNTANTS[key];
+            html += `<button class="choice" data-action="accountant" data-company="${ci}" data-pick="${key}">
+                       <b>${a.emoji} ${a.name}</b><small>${a.desc}</small></button>`;
+          }
+          html += `</div></div>`;
+          return html;
+        }
+
+        // Step 2: choose HR
+        if (!c.hr) {
+          html += `<div class="staff">${ACCOUNTANTS[c.accountant].emoji} Accountant: <b>${ACCOUNTANTS[c.accountant].name}</b></div>`;
+          html += `<h4>Hire your HR</h4><div class="choices">`;
+          for (const key in HR_OPTIONS) {
+            const h = HR_OPTIONS[key];
+            html += `<button class="choice" data-action="hr" data-company="${ci}" data-pick="${key}">
+                       <b>${h.emoji} ${h.name}</b><small>${h.desc}</small></button>`;
+          }
+          html += `</div></div>`;
+          return html;
+        }
+
+        // Minimized: just a one-line summary
+        if (c.collapsed) {
+          html += `<div class="muted">${ACCOUNTANTS[c.accountant].emoji} ${HR_OPTIONS[c.hr].emoji}
+                     · ${c.workers.length} / ${maxWorkers(c)} workers</div></div>`;
+          return html;
+        }
+
+        // Step 3: the running company
+        html += `<div class="staff">${ACCOUNTANTS[c.accountant].emoji} Accountant: <b>${ACCOUNTANTS[c.accountant].name}</b></div>
+                 <div class="staff">${HR_OPTIONS[c.hr].emoji} HR: <b>${HR_OPTIONS[c.hr].name}</b></div>
+                 <h4>Workers (${c.workers.length} / ${maxWorkers(c)})</h4>`;
+
+        if (c.workers.length === 0) html += `<div class="muted">No workers yet. Hire someone to start earning!</div>`;
+
+        c.workers.forEach((w, wi) => {
+          const tr = TRAITS[w.trait];
+          html += `<div class="worker" title="${tr.desc}">
+                     <span class="name">${tr.emoji} ${w.name} <span class="muted">${tr.name}<span id="w-copy-${ci}-${wi}"></span> · base ${w.base}</span></span>
+                     <span class="status" id="w-status-${ci}-${wi}"></span>
+                     <span class="earn" id="w-earn-${ci}-${wi}">0</span>
+                     <button class="btn ghost small" data-action="fire" data-company="${ci}" data-worker="${wi}">Fire</button>
+                   </div>`;
+        });
+
+        // Hiring
+        if (c.workers.length < maxWorkers(c)) {
+          // Candidates are always waiting while there is room
+          if (!c.candidates) c.candidates = makeCandidates(c);
+          const cost = hireCost(c);
+          const refresh = refreshCost(c);
+          html += `<h4>Choose who to hire (${cost === 0 ? "free" : fmt(cost) + " money"})</h4><div class="choices">`;
+          c.candidates.forEach((cand, k) => {
+            const tr = TRAITS[cand.trait];
+            html += `<button class="choice" data-action="hire" data-company="${ci}" data-pick="${k}" data-cost="${cost}">
+                       <b>${tr.emoji} ${cand.name}</b>
+                       <span class="income">${cand.base} / sec</span><br>
+                       <small><b>${tr.name}</b>: ${tr.desc}</small></button>`;
+          });
+          html += `</div><div style="margin-top:8px">
+                     <button class="btn ghost small" data-action="refresh" data-company="${ci}" data-cost="${refresh}">
+                       🔄 New options (${fmt(refresh)})</button></div>`;
+        } else {
+          html += `<div class="muted" style="margin-top:8px">The company is full.</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+      };
+
+      // Businesses grouped by type: group header, your companies, then the buy card
+      BUSINESS_TYPES.forEach(t => {
+        const mine = state.companies.map((c, ci) => ({ c, ci })).filter(x => x.c.typeId === t.id);
+        const owned = mine.length;
+
+        if (owned > 0) {
+          const collapsed = !!(state.groupCollapsed || {})[t.id];
+          const workers = mine.reduce((a, x) => a + x.c.workers.length, 0);
+          html += `<div class="card groupHead">
+            <div class="row">
+              <h3>${t.emoji} ${t.name} <span class="muted">× ${owned}</span></h3>
+              <span class="row">
+                <span class="income" id="g-income-${t.id}">+0 / sec</span>
+                <button class="btn ghost small" data-action="toggleGroup" data-type="${t.id}">${collapsed ? "▸ Show all" : "▾ Minimize all"}</button>
+              </span>
+            </div>
+            ${collapsed ? `<div class="muted">${owned} ${owned === 1 ? "business" : "businesses"} · ${workers} workers</div>` : ""}
+          </div>`;
+          if (!collapsed) mine.forEach(x => { html += companyCard(x.c, x.ci); });
+        }
+
+        if (owned >= t.maxOwned) return;
+        if (owned >= allowedToOwn(t)) {
+          html += `<div class="card" style="opacity:0.6">
+            <div class="row"><div><h3>🔒 ${t.emoji} ${t.name}</h3>
+              <div class="muted">Up to ${t.maxEmployees} employees · workers earn ${t.minIncome}–${t.maxIncome} / sec</div>
+              <div class="muted">${t.unlockText(owned)}</div>
+              <div class="muted">Owned: ${owned} / ${t.maxOwned}</div></div>
+            <span class="muted">${fmt(businessPrice(t))}</span></div></div>`;
+          return;
+        }
+        html += `<div class="card">
+          <div class="row">
+            <div><h3>${t.emoji} ${t.name}</h3>
+              <div class="muted">Up to ${t.maxEmployees} employees (incl. accountant &amp; HR) · workers earn ${t.minIncome}–${t.maxIncome} / sec</div>
+              ${t.perk ? `<div class="muted">⭐ ${t.perk}</div>` : ""}
+              <div class="muted">Owned: ${owned} / ${t.maxOwned}</div></div>
+            <button class="btn" data-action="buy" data-type="${t.id}" data-cost="${businessPrice(t)}">Buy ${fmt(businessPrice(t))}</button>
+          </div></div>`;
+      });
+
+      html += `<div class="muted">More businesses coming soon...</div>`;
+      $("shop").innerHTML = html;
+      updateAffordability();
+    }
+
+    // Grey out buttons you cannot afford
+    function updateAffordability() {
+      document.querySelectorAll("[data-cost]").forEach(btn => {
+        btn.disabled = state.money < Number(btn.dataset.cost);
+      });
+    }
+
+    function updateCounter() {
+      $("counter").firstChild.nodeValue = fmt(state.money) + " ";
+      $("casinoMoney").textContent = fmt(state.money);
+      $("casinoChips").textContent = fmt(state.casinoChips || 0);
+      $("investMoney").textContent = fmt(state.money);
+      updateAffordability();
+    }
+
+    /* =====================================================================
+       SHOP BUTTONS (one listener for the whole shop)
+       ===================================================================== */
+    $("shop").addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-action]");
+      if (!btn || btn.disabled || isPaused()) return;
+
+      const action = btn.dataset.action;
+      const company = state.companies[btn.dataset.company];
+
+      if (action === "buy") {
+        const t = BUSINESS_TYPES.find(x => x.id === btn.dataset.type);
+        const owned = state.companies.filter(c => c.typeId === t.id).length;
+        const price = businessPrice(t);
+        if (state.money < price || owned >= t.maxOwned) return;
+        if (owned >= allowedToOwn(t)) return;
+        state.money -= price;
+        state.companies.push({ typeId: t.id, accountant: null, hr: null, workers: [], candidates: null });
+      }
+      if (action === "toggle") company.collapsed = !company.collapsed;
+      if (action === "toggleGroup") {
+        state.groupCollapsed = state.groupCollapsed || {};
+        state.groupCollapsed[btn.dataset.type] = !state.groupCollapsed[btn.dataset.type];
+      }
+      if (action === "accountant") company.accountant = btn.dataset.pick;
+      if (action === "hr") company.hr = btn.dataset.pick;
+      if (action === "refresh") {
+        const cost = refreshCost(company);
+        if (state.money < cost) return;
+        state.money -= cost;
+        company.refreshes = (company.refreshes || 0) + 1;   // next refresh costs 10 more
+        company.candidates = makeCandidates(company);
+      }
+
+      if (action === "hire") {
+        const cost = hireCost(company);
+        if (state.money < cost) return;
+        state.money -= cost;
+        const cand = company.candidates[btn.dataset.pick];
+        company.workers.push(cand);
+        company.candidates = null;
+      }
+
+      if (action === "fire") company.workers.splice(Number(btn.dataset.worker), 1);
+
+      save();
+      updateCounter();
+      render();
+    });
+
+    /* =====================================================================
+       THE COIN
+       ===================================================================== */
+    let recentClicks = [];
+
+    // Sliding window: keep only clicks from the last 1000 ms and count them
+    function canClick(now) {
+      recentClicks = recentClicks.filter(t => now - t < 1000);
+      if (recentClicks.length >= MAX_CLICKS_PER_SECOND) return false;
+      recentClicks.push(now);
+      return true;
+    }
+
+    function showPlus(x, y) {
+      const el = document.createElement("div");
+      el.className = "plus";
+      el.textContent = "+" + MONEY_PER_CLICK;
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 800);
+    }
+
+    $("coin").addEventListener("click", (event) => {
+      if (isPaused()) return;
+      const coin = $("coin");
+      if (!canClick(performance.now())) {
+        coin.classList.remove("blocked");
+        void coin.offsetWidth;
+        coin.classList.add("blocked");
+        $("hint").textContent = "Max " + MAX_CLICKS_PER_SECOND + " clicks per second!";
+        return;
+      }
+      // clear the "too fast" warning, but keep tax messages on screen
+      if ($("hint").textContent.startsWith("Max ")) $("hint").textContent = "";
+      state.money += MONEY_PER_CLICK;
+      clickedThisSecond += MONEY_PER_CLICK;   // counts toward taxable income
+      updateCounter();
+      save();
+
+      const rect = coin.getBoundingClientRect();
+      showPlus(event.clientX || rect.left + rect.width / 2, event.clientY || rect.top);
+    });
+
+    /* =====================================================================
+       GAME LOOP: every second, companies pay out
+       ===================================================================== */
+    /* =====================================================================
+       TAX INSPECTION
+       Each inspection makes a tax bill with its own 5-minute timer. Bills stack.
+       When a timer runs out:
+         - enough money  -> game pauses, pop-up asks you to confirm payment
+         - not enough    -> bill +50% and 5 more minutes (only once)
+         - still not enough after that -> game over
+       ===================================================================== */
+    const isPaused = () => state.pendingTaxId !== null || state.gameOver;
+    const totalDebt = () => state.taxDebts.reduce((a, d) => a + d.amount, 0);
+
+    function startTaxInspection() {
+      state.secondsSinceTax = 0;
+      const earned = state.earnedHistory.reduce((a, b) => a + b, 0);
+      const amount = Math.ceil(TAX_RATE * earned);
+      if (amount <= 0) return;              // nothing earned, nothing to pay
+      state.taxDebts.push({ id: state.nextId++, amount, timeLeft: TAX_TIME_TO_PAY, extended: false });
+      showNotice("🧾 Tax inspection! You owe " + fmt(amount) + ". Pay within 5 minutes.");
+    }
+
+    function taxTick() {
+      // Roll for a new inspection every second (they can stack)
+      state.secondsSinceTax++;
+      if (Math.random() < TAX_CHANCE || state.secondsSinceTax >= TAX_FORCED_AFTER) startTaxInspection();
+
+      state.taxDebts.forEach(d => { if (d.timeLeft > 0) d.timeLeft--; });
+
+      // Handle bills whose time is up (one pop-up at a time)
+      for (const d of state.taxDebts) {
+        if (d.timeLeft > 0) continue;
+
+        if (state.money >= d.amount) {
+          state.pendingTaxId = d.id;      // pauses the game
+          showPaymentPopup(d);
+          return;
+        }
+        if (!d.extended) {
+          d.amount = Math.ceil(d.amount * (1 + TAX_LATE_PENALTY));
+          d.timeLeft = TAX_TIME_TO_PAY;
+          d.extended = true;
+          showNotice("⚠️ Not enough money! Tax bill raised to " + fmt(d.amount) + ". 5 more minutes.");
+          continue;
+        }
+        state.gameOver = true;
+        showGameOver(d);
+        return;
+      }
+    }
+
+    /* ----- Pop-up window ----- */
+    function showModal(html) {
+      $("modalBox").innerHTML = html;
+      $("modal").hidden = false;
+    }
+    function hideModal() { $("modal").hidden = true; }
+
+    function showPaymentPopup(d) {
+      showModal(`<h2>🧾 Tax payment due</h2>
+                 <p>Time is up for your tax bill of <b>${fmt(d.amount)}</b>.</p>
+                 <p class="muted">The game is paused until you pay.</p>
+                 <button class="btn big" data-modal="pay">Pay ${fmt(d.amount)}</button>`);
+    }
+
+    function showGameOver(d) {
+      showModal(`<h2>💀 Game over</h2>
+                 <p>You couldn't pay your tax bill of <b>${fmt(d.amount)}</b>, even after the extension.</p>
+                 <p class="muted">The tax office took everything. Time to start again from zero.</p>
+                 <button class="btn big" data-modal="restart">Start over</button>`);
+    }
+
+    $("modal").addEventListener("click", (event) => {
+      const action = event.target.closest("[data-modal]")?.dataset.modal;
+
+      if (action === "pay") {
+        const d = state.taxDebts.find(x => x.id === state.pendingTaxId);
+        if (d) {
+          state.money -= d.amount;
+          state.taxDebts = state.taxDebts.filter(x => x !== d);
+        }
+        state.pendingTaxId = null;        // resume the game
+        hideModal();
+        updateDebt();
+        updateCounter();
+        save();
+      }
+
+      if (action === "restart" || action === "confirmReset") {
+        stopSaving = true;
+        try { localStorage.removeItem("coinClickerSave"); localStorage.removeItem("coinClickerMoney"); } catch (e) {}
+        location.reload();
+      }
+      if (action === "close") hideModal();
+    });
+
+    /* ----- Short message under the coin ----- */
+    let noticeTimer = null;
+    function showNotice(text) {
+      $("hint").textContent = text;
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => { $("hint").textContent = ""; }, 6000);
+    }
+
+    /* ----- Red debt button ----- */
+    const clock = (sec) => Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+
+    function updateDebt() {
+      const btn = $("debt");
+      const banner = $("casinoDebt");
+      if (state.taxDebts.length === 0) { btn.hidden = true; banner.hidden = true; return; }
+      const soonest = Math.min(...state.taxDebts.map(d => d.timeLeft));
+      banner.hidden = false;
+      banner.textContent = `🧾 TAX DEBT: ${fmt(totalDebt())} · ${clock(soonest)} left · click to go pay it`;
+
+      // soonest deadline first
+      const bills = [...state.taxDebts].sort((a, b) => a.timeLeft - b.timeLeft);
+      btn.hidden = false;
+      btn.classList.toggle("urgent", bills[0].timeLeft <= 60);
+      btn.innerHTML = `🧾 TAX DEBT: ${fmt(totalDebt())}
+        <small>Click to pay</small>
+        ${bills.map(d => `<small>${fmt(d.amount)}${d.extended ? " (+50%, last chance!)" : ""} · ${clock(d.timeLeft)} left</small>`).join("")}`;
+    }
+
+    // Clicking pays as much as you can, starting with the bill closest to its deadline
+    $("debt").addEventListener("click", () => {
+      if (isPaused()) return;
+      state.taxDebts.sort((a, b) => a.timeLeft - b.timeLeft);
+      for (const d of state.taxDebts) {
+        const pay = Math.min(Math.floor(state.money), d.amount);
+        state.money -= pay;
+        d.amount -= pay;
+      }
+      state.taxDebts = state.taxDebts.filter(d => d.amount > 0);
+      updateDebt();
+      updateCounter();
+      save();
+    });
+
+    let clickedThisSecond = 0;
+
+    const flashUntil = {};   // keeps each company message on screen for 3 seconds
+    const signed = (n) => (n < 0 ? "" : "+") + n.toFixed(1);
+
+    setInterval(() => {
+      if (isPaused()) return;   // no income and no timers while a pop-up is open
+      let perSecond = 0;
+      const now = Date.now();
+
+      const groupIncome = {};
+      state.companies.forEach((c, ci) => {
+        const r = runCompany(c);
+        perSecond += r.total;
+        groupIncome[c.typeId] = (groupIncome[c.typeId] || 0) + r.total;
+
+        const incomeEl = $("c-income-" + ci);
+        if (incomeEl) incomeEl.textContent = signed(r.total) + " / sec";
+
+        const flashEl = $("c-flash-" + ci);
+        if (r.flash) flashUntil[ci] = now + 3000;
+        if (flashEl) {
+          if (r.flash) flashEl.textContent = r.flash;
+          else if (!flashUntil[ci] || now > flashUntil[ci]) flashEl.textContent = "";
+        }
+
+        r.perWorker.forEach((amount, wi) => {
+          const earnEl = $("w-earn-" + ci + "-" + wi);
+          const statusEl = $("w-status-" + ci + "-" + wi);
+          const copyEl = $("w-copy-" + ci + "-" + wi);
+          if (earnEl) earnEl.textContent = amount.toFixed(1);
+          if (statusEl) statusEl.textContent = r.status[wi];
+          if (copyEl) {
+            const w = c.workers[wi];
+            copyEl.textContent = w.copied ? " as " + TRAITS[w.copied].emoji + " " + TRAITS[w.copied].name : "";
+          }
+        });
+      });
+
+      for (const typeId in groupIncome) {
+        const el = $("g-income-" + typeId);
+        if (el) el.textContent = signed(groupIncome[typeId]) + " / sec";
+      }
+
+      state.money = Math.max(0, state.money + perSecond);
+
+      clickedThisSecond += investTick();   // real estate rent counts as taxable income
+
+      // Remember what was earned this second, keep only the last 5 minutes
+      state.earnedHistory.push(Math.max(0, perSecond) + clickedThisSecond);
+      if (state.earnedHistory.length > TAX_LOOKBACK) state.earnedHistory.shift();
+      clickedThisSecond = 0;
+
+      taxTick();
+      updateDebt();
+      $("perSecond").textContent = signed(perSecond) + " / sec";
+      updateCounter();
+      save();
+    }, 1000);
+
+    /* =====================================================================
+       VIEWS: switch between Income and Casino (income keeps running either way)
+       ===================================================================== */
+    function showView(view) {
+      state.view = view;
+      $("incomeView").hidden = view !== "income";
+      $("casinoView").hidden = view !== "casino";
+      $("investView").hidden = view !== "invest";
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
+      save();
+    }
+    $("tabs").addEventListener("click", (e) => {
+      const tab = e.target.closest(".tab");
+      if (tab) showView(tab.dataset.view);
+    });
+    $("casinoDebt").addEventListener("click", () => showView("income"));
+
+    /* =====================================================================
+       CASINO WALLET: move money in and out as chips
+       ===================================================================== */
+    if (typeof state.casinoChips !== "number") state.casinoChips = 0;
+
+    document.querySelectorAll("[data-pct]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        $("buyAmount").value = Math.floor(state.money * Number(btn.dataset.pct));
+      });
+    });
+
+    $("buyIn").addEventListener("click", () => {
+      if (isPaused()) return;
+      const amount = Math.floor(Number($("buyAmount").value));
+      if (!(amount > 0)) return casinoMessage("Type how much money to bring in.");
+      if (amount > state.money) return casinoMessage("You don't have that much money.");
+      state.money -= amount;
+      state.casinoChips += amount;
+      $("buyAmount").value = "";
+      casinoMessage("");
+      updateCounter(); save();
+    });
+
+    $("cashOut").addEventListener("click", () => {
+      if (isPaused() || anyTableSpinning()) return;
+      state.money += state.casinoChips;
+      state.casinoChips = 0;
+      updateCounter(); save();
+    });
+
+    function casinoMessage(text) {
+      const el = $("casinoMsg");
+      if (el) el.textContent = text;
+    }
+
+    /* =====================================================================
+       CASINO GAMES
+       To add a game later: add it to CASINO_GAMES and write its render function.
+       ===================================================================== */
+    const CASINO_GAMES = [
+      { id: "rouletteLow",  name: "Roulette: Classic table", emoji: "🎡", desc: "European roulette, bets from 100 to 5,000 per spot." },
+      { id: "rouletteHigh", name: "Roulette: High rollers",  emoji: "💎", desc: "European roulette, bets from 5,000 to 250,000 per spot." },
+    ];
+    let currentGame = null;   // null = game list
+
+    /* =====================================================================
+       GAMBLER LEVEL: 1 XP for every bcoin you bet.
+       Total XP needed follows a smooth curve: XP = 3.738 * level^6.728
+         level 10 ≈ 20 million, level 50 ≈ 1 trillion, level 99 ≈ 100 trillion
+       Each level gives 0.1% cashback on lost bets (level 10 = 1%). Max level 99.
+       ===================================================================== */
+    const MAX_LEVEL = 99;
+    const XP_CURVE_A = 3.738;
+    const XP_CURVE_K = 6.728;
+
+    // LEVEL_XP[L] = total XP needed to reach level L (each step rounded to 3 digits)
+    const LEVEL_XP = [0, 0];
+    for (let L = 2; L <= MAX_LEVEL; L++) {
+      const raw = XP_CURVE_A * (Math.pow(L, XP_CURVE_K) - Math.pow(L - 1, XP_CURVE_K));
+      const p = Math.pow(10, Math.floor(Math.log10(raw)) - 2);
+      LEVEL_XP[L] = LEVEL_XP[L - 1] + Math.round(raw / p) * p;
+    }
+    const CASHBACK_PER_LEVEL = 0.001;   // 0.1%
+
+    if (typeof state.casinoXp !== "number") state.casinoXp = 0;
+
+    function levelInfo(xp) {
+      let level = 1;
+      while (level < MAX_LEVEL && xp >= LEVEL_XP[level + 1]) level++;
+      if (level >= MAX_LEVEL) return { level, into: 0, need: 0, max: true };
+      return { level, into: xp - LEVEL_XP[level], need: LEVEL_XP[level + 1] - LEVEL_XP[level], max: false };
+    }
+    const cashbackRate = () => levelInfo(state.casinoXp).level * CASHBACK_PER_LEVEL;
+    const pct = (r) => (r * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) + "%";
+
+    function updateCasinoLevel() {
+      const info = levelInfo(state.casinoXp);
+      $("levelNum").textContent = info.level;
+      $("levelText").textContent = info.level + (info.max ? " (MAX)" : "");
+      $("cashbackText").textContent = "Cashback " + pct(cashbackRate()) + " on lost bets";
+      $("xpFill").style.width = info.max ? "100%" : (100 * info.into / info.need) + "%";
+      $("xpText").textContent = info.max ? "Max level reached!"
+        : fmt(info.into) + " / " + fmt(info.need) + " XP to level " + (info.level + 1);
+    }
+
+    // Adds XP and returns how many levels you gained
+    function addXp(amount) {
+      const before = levelInfo(state.casinoXp).level;
+      state.casinoXp += amount;
+      const gained = levelInfo(state.casinoXp).level - before;
+      updateCasinoLevel();
+      if (gained > 0) {
+        render();   // a new business may have unlocked
+        const box = $("casinoLevel");
+        box.classList.remove("levelUp"); void box.offsetWidth; box.classList.add("levelUp");
+      }
+      return gained;
+    }
+
+    function renderCasino() {
+      const box = $("casinoGame");
+      if (!currentGame) {
+        box.innerHTML = `<h2>Choose a game</h2>` + CASINO_GAMES.map(g =>
+          `<button class="card gameCard" data-game="${g.id}">
+             <h3>${g.emoji} ${g.name}</h3><div class="muted">${g.desc}</div></button>`).join("") +
+          `<div class="muted">More games coming soon...</div>`;
+        return;
+      }
+      if (ROULETTE_TABLES[currentGame]) { roulette = ROULETTE_TABLES[currentGame]; renderRoulette(); }
+    }
+
+    $("casinoGame").addEventListener("click", (e) => {
+      const card = e.target.closest("[data-game]");
+      if (card) { currentGame = card.dataset.game; renderCasino(); }
+      const back = e.target.closest("[data-back]");
+      if (back && !roulette.spinning) { currentGame = null; renderCasino(); }
+    });
+
+    /* =====================================================================
+       ROULETTE (European: 0 and 1-36)
+       ===================================================================== */
+    const WHEEL_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
+                         5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+    const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+
+    const colorOf = (n) => n === 0 ? "green" : RED_NUMBERS.includes(n) ? "red" : "black";
+
+    // Every bet type: which numbers win, and the payout (35 means you win 35x your bet + keep your bet)
+    function betInfo(key) {
+      if (key.startsWith("n")) { const n = Number(key.slice(1)); return { label: String(n), wins: x => x === n, pays: 35 }; }
+      // Inside bets on several numbers, e.g. "x1-2" (split), "x1-2-4-5" (corner)
+      if (key.startsWith("x")) {
+        const nums = key.slice(1).split("-").map(Number);
+        const types = { 2: ["Split", 17], 3: ["Street", 11], 4: ["Corner", 8], 6: ["Six line", 5] };
+        let [name, pays] = types[nums.length];
+        if (key === "x0-1-2-3") name = "First four";
+        return { label: name + " " + nums.join("-"), nums, wins: x => nums.includes(x), pays };
+      }
+      const all = {
+        red:    { label: "Red",     wins: x => colorOf(x) === "red",   pays: 1 },
+        black:  { label: "Black",   wins: x => colorOf(x) === "black", pays: 1 },
+        odd:    { label: "Odd",     wins: x => x > 0 && x % 2 === 1,   pays: 1 },
+        even:   { label: "Even",    wins: x => x > 0 && x % 2 === 0,   pays: 1 },
+        low:    { label: "1–18",    wins: x => x >= 1 && x <= 18,      pays: 1 },
+        high:   { label: "19–36",   wins: x => x >= 19,                pays: 1 },
+        dozen1: { label: "1st 12",  wins: x => x >= 1 && x <= 12,      pays: 2 },
+        dozen2: { label: "2nd 12",  wins: x => x >= 13 && x <= 24,     pays: 2 },
+        dozen3: { label: "3rd 12",  wins: x => x >= 25,                pays: 2 },
+        col1:   { label: "2 to 1",  wins: x => x > 0 && x % 3 === 1,   pays: 2 },  // bottom row: 1, 4, 7...
+        col2:   { label: "2 to 1",  wins: x => x > 0 && x % 3 === 2,   pays: 2 },  // middle row: 2, 5, 8...
+        col3:   { label: "2 to 1",  wins: x => x > 0 && x % 3 === 0,   pays: 2 },  // top row: 3, 6, 9...
+      };
+      return all[key];
+    }
+
+    // Each table has its own limits, chips, bets and history.
+    // min / max = the smallest and largest amount allowed on ONE betting spot.
+    function makeTable(id, title, emoji, min, max, chips) {
+      return {
+        id, title, emoji, min, max,
+        chips,             // chip values you can pick at this table
+        chip: chips[0],    // selected chip value
+        bets: {},          // { betKey: amount } for the next spin (already taken from your chips)
+        lastBets: {},      // to repeat the previous spin's bets
+        spinning: false,
+        rotation: 0,       // current wheel angle
+        history: [],       // last results
+        lastResult: null,
+      };
+    }
+    const ROULETTE_TABLES = {
+      rouletteLow:  makeTable("rouletteLow",  "Roulette: Classic table", "🎡", 100,  5000,   [100, 500, 1000, 5000]),
+      rouletteHigh: makeTable("rouletteHigh", "Roulette: High rollers",  "💎", 5000, 250000, [5000, 10000, 25000, 50000, 100000, 250000]),
+    };
+    let roulette = ROULETTE_TABLES.rouletteLow;   // the table you are looking at
+    const anyTableSpinning = () => Object.values(ROULETTE_TABLES).some(t => t.spinning);
+
+    // Bets on the tables are saved, so a reload never loses chips
+    if (!state.rouletteBets || !state.rouletteBets.tables) {
+      // old save had one table: give its chips back
+      const old = state.rouletteBets || {};
+      state.casinoChips = (state.casinoChips || 0) + Object.values(old).reduce((a, b) => a + b, 0);
+      state.rouletteBets = { tables: {} };
+    }
+    for (const id in ROULETTE_TABLES) {
+      ROULETTE_TABLES[id].bets = state.rouletteBets.tables[id] = state.rouletteBets.tables[id] || {};
+    }
+    const setBets = (table, bets) => { table.bets = state.rouletteBets.tables[table.id] = bets; };
+
+    const totalBets = (table = roulette) => Object.values(table.bets).reduce((a, b) => a + b, 0);
+    const shortNum = (v) => v >= 1000 ? (v / 1000) + "k" : String(v);
+
+    // Every chip value has its own color
+    const CHIP_COLORS = {
+      100:    { bg: "#eceff1", text: "#263238" },   // white
+      500:    { bg: "#8e24aa", text: "#fff" },      // purple
+      1000:   { bg: "#00acc1", text: "#fff" },      // cyan
+      5000:   { bg: "#fb8c00", text: "#fff" },      // orange
+      10000:  { bg: "#1e88e5", text: "#fff" },      // blue
+      25000:  { bg: "#6d4c41", text: "#fff" },      // brown
+      50000:  { bg: "#ec407a", text: "#fff" },      // pink
+      100000: { bg: "#37474f", text: "#ffd34d" },   // dark grey, gold text
+      250000: { bg: "#ffd700", text: "#3e2b00" },   // gold
+    };
+    // A stack of bets shows the color of the biggest chip that fits in it
+    function chipColor(amount) {
+      const values = Object.keys(CHIP_COLORS).map(Number).sort((a, b) => b - a);
+      return CHIP_COLORS[values.find(v => v <= amount) || 100];
+    }
+    function chipMark(amount) {
+      const c = chipColor(amount);
+      return `<span class="chipMark" style="background:${c.bg}; color:${c.text}">${shortNum(amount)}</span>`;
+    }
+    const insideKey = (...nums) => "x" + nums.sort((a, b) => a - b).join("-");
+
+    function wheelBackground() {
+      const seg = 360 / 37;
+      const colors = { red: "#c62828", black: "#1b1b1b", green: "#2e7d32" };
+      return "conic-gradient(" + WHEEL_ORDER.map((n, i) =>
+        `${colors[colorOf(n)]} ${i * seg}deg ${(i + 1) * seg}deg`).join(", ") + ")";
+    }
+
+    function renderRoulette() {
+      const seg = 360 / 37;
+      const nums = WHEEL_ORDER.map((n, i) =>
+        `<span class="num" style="transform: rotate(${(i + 0.5) * seg}deg) translateY(-118px)">${n}</span>`).join("");
+
+      const last = roulette.lastResult;
+      const won = (key) => last !== null && !roulette.spinning && betInfo(key).wins(last);
+
+      // A table cell: shows a chip instead of its text when you have a bet on it
+      const cell = (key, text, cls = "", style = "", extra = "", attrs = "") => {
+        const amount = roulette.bets[key];
+        return `<div class="cell ${cls}${won(key) ? " winner" : ""}" data-bet="${key}" style="${style}" ${attrs}>
+                  ${amount ? chipMark(amount) : text}${extra}</div>`;
+      };
+
+      // A hot-spot on a line between numbers
+      const spot = (pos, nums) => {
+        const key = insideKey(...nums);
+        const amount = roulette.bets[key];
+        return `<div class="spot ${pos}${amount && won(key) ? " winner" : ""}" data-bet="${key}" data-nums="${nums.join(",")}"
+                     title="${betInfo(key).label} · pays ${betInfo(key).pays}:1">${amount ? chipMark(amount) : ""}</div>`;
+      };
+
+      // Table: zero on the left, 3 rows of 12 numbers, column bets on the right
+      // Zero: splits 0-3, 0-2, 0-1 on its right edge, and the 0-1-2-3 corner at its bottom-right corner
+      const zeroSpots =
+        spot("right zsplit", [0, 3]).replace('class="spot', 'style="top:6%" class="spot') +
+        spot("right zsplit", [0, 2]).replace('class="spot', 'style="top:40%" class="spot') +
+        spot("right zsplit", [0, 1]).replace('class="spot', 'style="top:74%" class="spot') +
+        spot("corner", [0, 1, 2, 3]);
+      let table = cell("n0", "0", "green", "grid-row: 1 / span 3; grid-column: 1;", zeroSpots, 'data-n="0"');
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 12; col++) {
+          const n = col * 3 + (3 - row);   // top row 3, 6, 9...  bottom row 1, 4, 7...
+          let spots = "";
+          const lastCol = col === 11;
+          if (!lastCol) spots += spot("right", [n, n + 3]);                         // split →
+          if (row < 2) {
+            spots += spot("bottom", [n, n - 1]);                                    // split ↓
+            if (!lastCol) spots += spot("corner", [n, n - 1, n + 3, n + 2]);        // corner
+          } else {
+            spots += spot("bottom", [n, n + 1, n + 2]);                             // street (bottom edge)
+            if (!lastCol) spots += spot("corner", [n, n + 1, n + 2, n + 3, n + 4, n + 5]); // six line
+          }
+          table += cell("n" + n, n, colorOf(n), `grid-row: ${row + 1}; grid-column: ${col + 2};`, spots, `data-n="${n}"`);
+        }
+        table += cell("col" + (3 - row), "2:1", "", `grid-row: ${row + 1}; grid-column: 14;`);
+      }
+      ["dozen1", "dozen2", "dozen3"].forEach((k, i) =>
+        table += cell(k, betInfo(k).label, "", `grid-row: 4; grid-column: ${2 + i * 4} / span 4;`));
+      [["low", ""], ["even", ""], ["red", "red"], ["black", "black"], ["odd", ""], ["high", ""]].forEach(([k, cls], i) =>
+        table += cell(k, betInfo(k).label, cls, `grid-row: 5; grid-column: ${2 + i * 2} / span 2;`));
+
+      const hasLast = Object.keys(roulette.lastBets).length > 0;
+      $("casinoGame").innerHTML = `
+        <div class="card">
+          <div class="row"><div><h2 style="margin:0">${roulette.emoji} ${roulette.title}</h2>
+            <div class="muted">Limits per spot: ${fmt(roulette.min)} – ${fmt(roulette.max)}</div></div>
+            <button class="btn ghost small" data-back="1">← All games</button></div>
+
+          <div class="rouletteTop" style="margin-top:14px">
+            <div id="wheelWrap">
+              <div id="wheel" style="background:${wheelBackground()}; transform: rotate(${roulette.rotation}deg)">${nums}</div>
+              <div id="ball" style="transform:${ballTransform(...restingBall(roulette))}"></div>
+            </div>
+            <div id="result">
+              <div id="resultNum" class="${last === null ? "" : colorOf(last)}">${last === null ? "?" : last}</div>
+              <div id="resultText" class="muted">${roulette.spinning ? "Spinning..." : "Place your bets!"}</div>
+              <div id="history">${roulette.history.map(n => `<span class="${colorOf(n)}">${n}</span>`).join("")}</div>
+            </div>
+          </div>
+
+          <div class="chipsRow">
+            <span class="muted">Chip:</span>
+            ${roulette.chips.map(v => `<button class="chip ${v === roulette.chip ? "selected" : ""}" data-chip="${v}"
+                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${shortNum(v)}</button>`).join("")}
+          </div>
+
+          <div id="tableWrap"><div id="table">${table}</div></div>
+
+          <div class="moneyRow" style="margin-top:12px">
+            <button class="btn" id="spin" ${roulette.spinning || totalBets() === 0 ? "disabled" : ""}>🎡 Spin (bet ${fmt(totalBets())})</button>
+            <button class="btn ghost" id="clearBets" ${roulette.spinning ? "disabled" : ""}>Clear bets</button>
+            <button class="btn ghost" id="rebet" ${roulette.spinning || !hasLast ? "disabled" : ""}>↺ Repeat last bets</button>
+          </div>
+          <div id="casinoMsg" class="flash" style="margin-top:8px"></div>
+          <div class="muted" style="margin-top:6px">Click a number, or the line between numbers: between 2 = split, where 4 meet = corner, bottom edge = street, bottom corner = six line (next to 0: first four 0-1-2-3).</div>
+          <div class="muted">Pays: number 35:1 · split 17:1 · street 11:1 · corner / first four 8:1 · six line 5:1 · dozen / column 2:1 · red, black, odd, even, 1–18, 19–36 1:1 · on 0 only bets on 0 win</div>
+        </div>`;
+    }
+
+    // Clicks inside the roulette
+    $("casinoGame").addEventListener("click", (e) => {
+      if (!ROULETTE_TABLES[currentGame]) return;
+      if (isPaused()) return;
+
+      const chip = e.target.closest("[data-chip]");
+      if (chip && !roulette.spinning) { roulette.chip = Number(chip.dataset.chip); renderRoulette(); return; }
+
+      const betCell = e.target.closest("[data-bet]");
+      if (betCell && !roulette.spinning) {
+        if (state.casinoChips < roulette.chip) return casinoMessage("Not enough chips. Add money to the casino first.");
+        const key = betCell.dataset.bet;
+        if ((roulette.bets[key] || 0) + roulette.chip > roulette.max)
+          return casinoMessage("Table limit: max " + fmt(roulette.max) + " on one spot.");
+        state.casinoChips -= roulette.chip;
+        roulette.bets[key] = (roulette.bets[key] || 0) + roulette.chip;
+        roulette.lastResult = null;
+        updateCounter(); renderRoulette(); save();
+        return;
+      }
+
+      if (e.target.closest("#clearBets") && !roulette.spinning) {
+        state.casinoChips += totalBets();   // give the chips back
+        setBets(roulette, {});
+        updateCounter(); renderRoulette(); save();
+        return;
+      }
+
+      if (e.target.closest("#rebet") && !roulette.spinning) {
+        const need = Object.values(roulette.lastBets).reduce((a, b) => a + b, 0);
+        if (state.casinoChips < need) return casinoMessage("Not enough chips to repeat (" + fmt(need) + " needed).");
+        for (const k in roulette.lastBets)
+          if ((roulette.bets[k] || 0) + roulette.lastBets[k] > roulette.max)
+            return casinoMessage("Table limit: max " + fmt(roulette.max) + " on one spot.");
+        state.casinoChips -= need;
+        for (const k in roulette.lastBets) roulette.bets[k] = (roulette.bets[k] || 0) + roulette.lastBets[k];
+        roulette.lastResult = null;
+        updateCounter(); renderRoulette(); save();
+        return;
+      }
+
+      if (e.target.closest("#spin") && !roulette.spinning && totalBets() > 0) spinRoulette();
+    });
+
+    // Hovering a split / corner / street / six line lights up the numbers it covers
+    $("casinoGame").addEventListener("mouseover", (e) => {
+      document.querySelectorAll(".cell.covered").forEach(c => c.classList.remove("covered"));
+      const sp = e.target.closest(".spot");
+      if (!sp) return;
+      sp.dataset.nums.split(",").forEach(n => {
+        const c = document.querySelector(`.cell[data-n="${n}"]`);
+        if (c) c.classList.add("covered");
+      });
+    });
+
+    /* ----- Ball animation -----
+       The wheel turns clockwise and slows down. The ball runs the other way around the
+       outer track, slows to a crawl (the tease), then drops and bounces into its pocket. */
+    const SPIN_MS = 7500;          // how long a spin lasts
+    const BALL_TRACK = 126;        // ball distance from the centre while rolling on the rim
+    const BALL_POCKET = 100;       // ball distance from the centre once it lands
+    const BALL_TURNS = 8;          // laps the ball makes (relative to the wheel)
+    const DROP_AT = 0.72;          // when (0-1 of the spin) the ball starts falling in
+
+    // Angle of a number's pocket on the wheel (0 = top, clockwise)
+    const pocketAngle = (n) => (WHEEL_ORDER.indexOf(n) + 0.5) * (360 / 37);
+
+    function ballTransform(angle, radius) {
+      const rad = angle * Math.PI / 180;
+      const x = 140 + radius * Math.sin(rad) - 7;
+      const y = 140 - radius * Math.cos(rad) - 7;
+      return `translate(${x}px, ${y}px)`;
+    }
+
+    // Where the ball sits when nothing is spinning
+    function restingBall(table) {
+      if (table.lastResult === null) return [0, BALL_TRACK];
+      return [table.rotation + pocketAngle(table.lastResult), BALL_POCKET];
+    }
+
+    // Bouncy landing (0 -> 1 with a few small bounces)
+    function bounce(t) {
+      const n = 7.5625, d = 2.75;
+      if (t < 1 / d) return n * t * t;
+      if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75;
+      if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375;
+      return n * (t -= 2.625 / d) * t + 0.984375;
+    }
+
+    function animateSpin(table, result, onDone) {
+      const startWheel = table.rotation % 360;
+      const endWheel = startWheel + 720;           // wheel makes 2 slowing turns
+      const pocket = pocketAngle(result);
+      const start = performance.now();
+
+      function frame(now) {
+        const p = Math.min(1, (now - start) / SPIN_MS);
+        const wheelAngle = startWheel + 720 * (1 - Math.pow(1 - p, 2));
+
+        // Ball position relative to the wheel: many laps that shrink to 0 at the pocket.
+        // The cubic slow-down leaves the ball crawling past the last few numbers.
+        let rel = pocket + BALL_TURNS * 360 * Math.pow(1 - p, 3);
+        let radius = BALL_TRACK;
+        if (p > DROP_AT) {
+          const q = (p - DROP_AT) / (1 - DROP_AT);
+          radius = BALL_TRACK - (BALL_TRACK - BALL_POCKET) * bounce(q);
+          rel += Math.sin(q * Math.PI * 4) * 3 * (1 - q);   // little skips between pockets
+        }
+
+        const wheel = $("wheel"), ball = $("ball");
+        if (wheel) wheel.style.transform = `rotate(${wheelAngle}deg)`;
+        if (ball) ball.style.transform = ballTransform(wheelAngle + rel, radius);
+
+        if (p < 1) requestAnimationFrame(frame);
+      }
+      table.rotation = endWheel;
+      requestAnimationFrame(frame);
+      setTimeout(onDone, SPIN_MS + 150);
+    }
+
+    // Money returned for the bets on a given result (bet back + winnings)
+    function roulettePayout(bets, result) {
+      let back = 0;
+      for (const key in bets) {
+        const info = betInfo(key);
+        if (info.wins(result)) back += bets[key] * (info.pays + 1);
+      }
+      return back;
+    }
+
+    // Random whole number from 0 to n-1 using the browser's cryptographic random generator
+    // (the same kind used for passwords and encryption). Every spin is independent:
+    // the wheel has no memory of earlier results.
+    function secureRandomInt(n) {
+      if (!window.crypto || !window.crypto.getRandomValues) return Math.floor(Math.random() * n);
+      const limit = Math.floor(0x100000000 / n) * n;   // throw away values that would make some numbers more likely
+      const buf = new Uint32Array(1);
+      do { window.crypto.getRandomValues(buf); } while (buf[0] >= limit);
+      return buf[0] % n;
+    }
+
+    function spinRoulette() {
+      const table = roulette;                            // the table being spun
+      const result = secureRandomInt(37);                // 0 to 36, all equally likely
+      table.spinning = true;
+      table.lastBets = { ...table.bets };
+      renderRoulette();                    // draws the wheel at its current angle
+
+      animateSpin(table, result, () => {
+        const bet = totalBets(table);
+        const back = roulettePayout(table.bets, result);
+
+        // Cashback on every bet that lost (uses your level before this spin's XP)
+        let lost = 0;
+        for (const key in table.bets) if (!betInfo(key).wins(result)) lost += table.bets[key];
+        const cashback = lost * cashbackRate();
+
+        state.casinoChips += back + cashback;
+        const levelsGained = addXp(bet);      // 1 XP per bcoin bet
+        setBets(table, {});
+        table.spinning = false;
+        table.lastResult = result;
+        table.history = [result, ...table.history].slice(0, 12);
+        updateCounter();
+        if (currentGame === table.id) {
+          renderRoulette();
+          $("resultText").textContent = back > 0
+            ? `You won ${fmt(back)}! (${back - bet >= 0 ? "+" : ""}${fmt(back - bet)})`
+            : `You lost ${fmt(bet)}.`;
+          if (cashback > 0) $("resultText").textContent += ` Cashback +${cashback.toLocaleString(undefined, { maximumFractionDigits: 1 })}.`;
+          if (levelsGained > 0) $("resultText").textContent += ` 🎉 Level up! Now level ${levelInfo(state.casinoXp).level}.`;
+          $("resultText").className = back > 0 ? "income" : "flash";
+        }
+        save();
+      });
+    }
+
+    /* =====================================================================
+       INVESTING
+       Investor level: 1 XP for every bcoin you invest (same level curve as the casino).
+       ===================================================================== */
+    const RE_MIN = 50000;
+    const RE_LOCK = 1200;           // 20 minutes locked after buying
+    const RE_RENT_EVERY = 45;       // rent every 45 seconds...
+    const RE_RENT_RATE = 0.012;     // ...of 1.2% of the property's value (about +80% per hour after crashes)
+    const RE_CRASH_CHANCE = 1 / 21600;  // about one crash every 6 hours
+    const RE_CRASH_LOSS = 0.70;     // a crash wipes out 70% of every property's value
+
+    const ETF_MIN = 1000;
+    const ETF_EVERY = 10;           // the market moves every 10 seconds
+    const ETF_BASE_FEE = 0.10;      // 10% cash-out fee at level 1...
+    const ETF_FEE_PER_LEVEL = 0.001;// ...0.1% less for every level above 1
+
+    if (!state.invest) state.invest = { xp: 0, properties: [], etf: 0, etfTimer: ETF_EVERY, etfHistory: [] };
+    const inv = state.invest;
+
+    const investLevel = () => levelInfo(inv.xp).level;
+    const etfFee = () => Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (investLevel() - 1));
+
+    function investMessage(text, good) {
+      $("investMsg").textContent = text;
+      $("investMsg").className = good ? "income" : "flash";
+    }
+
+    function updateInvestLevel() {
+      const info = levelInfo(inv.xp);
+      $("investLevelNum").textContent = info.level;
+      $("investLevelText").textContent = info.level + (info.max ? " (MAX)" : "");
+      $("investFeeText").textContent = "ETF cash-out fee " + pct(etfFee());
+      $("etfFeeInline").textContent = pct(etfFee());
+      $("investXpFill").style.width = info.max ? "100%" : (100 * info.into / info.need) + "%";
+      $("investXpText").textContent = info.max ? "Max level reached!"
+        : fmt(info.into) + " / " + fmt(info.need) + " XP to level " + (info.level + 1);
+    }
+
+    function addInvestXp(amount) {
+      const before = investLevel();
+      inv.xp += amount;
+      updateInvestLevel();
+      if (investLevel() > before) {
+        render();   // a new hotel may have unlocked
+        const box = $("investLevel");
+        box.classList.remove("levelUp"); void box.offsetWidth; box.classList.add("levelUp");
+        investMessage("🎉 Investor level up! Now level " + investLevel() + ". ETF fee is now " + pct(etfFee()) + ".", true);
+      }
+    }
+
+    // Read an amount box; returns a whole number or 0
+    const readAmount = (id) => Math.floor(Number($(id).value)) || 0;
+
+    // 25% / 50% / All buttons fill in an amount of your money
+    document.querySelectorAll("[data-invpct]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const box = { re: "reAmount", etf: "etfAmount", petf: "petfAmount" }[btn.dataset.invpct];
+        let amount = Math.floor(state.money * Number(btn.dataset.pct));
+        if (btn.dataset.invpct === "petf") amount = Math.min(amount, PETF_MAX);
+        $(box).value = amount;
+      });
+    });
+
+    /* ----- Info buttons: show / hide the explanation of each investment ----- */
+    if (!inv.infoOpen) inv.infoOpen = {};
+    function applyInfo() {
+      document.querySelectorAll("[data-info]").forEach(btn => {
+        const open = !!inv.infoOpen[btn.dataset.info];
+        $("info-" + btn.dataset.info).hidden = !open;
+        btn.classList.toggle("open", open);
+        btn.textContent = open ? "ℹ️ Hide info" : "ℹ️ Info";
+      });
+    }
+    document.querySelectorAll("[data-info]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        inv.infoOpen[btn.dataset.info] = !inv.infoOpen[btn.dataset.info];
+        applyInfo(); save();
+      });
+    });
+    applyInfo();
+
+    /* ----- Real estate ----- */
+    $("reBuy").addEventListener("click", () => {
+      if (isPaused()) return;
+      const amount = readAmount("reAmount");
+      if (amount < RE_MIN) return investMessage("Real estate needs at least " + fmt(RE_MIN) + ".");
+      if (amount > state.money) return investMessage("You don't have that much money.");
+      state.money -= amount;
+      inv.properties.push({ id: state.nextId++, value: amount, lock: RE_LOCK, rentIn: RE_RENT_EVERY });
+      $("reAmount").value = "";
+      addInvestXp(amount);
+      investMessage("🏠 Bought a property for " + fmt(amount) + ".", true);
+      renderProperties(); updateCounter(); updateInvestLive(); save();
+    });
+
+    $("reList").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-sell]");
+      if (!btn || isPaused()) return;
+      const p = inv.properties.find(x => x.id === Number(btn.dataset.sell));
+      if (!p || p.lock > 0) return;
+      state.money += p.value;
+      inv.properties = inv.properties.filter(x => x !== p);
+      investMessage("Sold a property for " + fmt(p.value) + ".", true);
+      renderProperties(); updateCounter(); updateInvestLive(); save();
+    });
+
+    function renderProperties() {
+      if (inv.properties.length === 0) { $("reList").innerHTML = `<div class="muted">You don't own any property yet.</div>`; return; }
+      $("reList").innerHTML = inv.properties.map((p, i) => `
+        <div class="property">
+          <span class="grow">🏠 Property ${i + 1} · value <b id="re-value-${p.id}">${fmt(p.value)}</b></span>
+          <span class="muted">rent in <span id="re-rent-${p.id}">${clock(p.rentIn)}</span></span>
+          <button class="btn small" data-sell="${p.id}" id="re-sell-${p.id}" ${p.lock > 0 ? "disabled" : ""}>
+            ${p.lock > 0 ? "🔒 " + clock(p.lock) : "Sell"}</button>
+        </div>`).join("");
+    }
+
+    /* ----- ETF ----- */
+    $("etfBuy").addEventListener("click", () => {
+      if (isPaused()) return;
+      const amount = readAmount("etfAmount");
+      if (amount < ETF_MIN) return investMessage("The ETF needs at least " + fmt(ETF_MIN) + " per investment.");
+      if (amount > state.money) return investMessage("You don't have that much money.");
+      state.money -= amount;
+      inv.etf += amount;
+      $("etfAmount").value = "";
+      addInvestXp(amount);
+      investMessage("📊 Invested " + fmt(amount) + " in the ETF.", true);
+      updateCounter(); updateInvestLive(); save();
+    });
+
+    function cashOutEtf(amount) {
+      if (isPaused()) return;
+      amount = Math.min(amount, inv.etf);
+      if (amount <= 0) return investMessage("Nothing to cash out.");
+      const fee = amount * etfFee();
+      inv.etf -= amount;
+      if (inv.etf < 0.5) inv.etf = 0;
+      state.money += amount - fee;
+      $("etfSellAmount").value = "";
+      investMessage(`Cashed out ${fmt(amount)} (fee ${fmt(fee)}): +${fmt(amount - fee)} to your money.`, true);
+      updateCounter(); updateInvestLive(); save();
+    }
+    $("etfSell").addEventListener("click", () => cashOutEtf(readAmount("etfSellAmount")));
+    $("etfSellAll").addEventListener("click", () => cashOutEtf(inv.etf));
+    $("etfSellAmount").addEventListener("input", updateInvestLive);
+
+    /* ----- Broker ETF (needs a Brokerage Firm): no fee, one slot ----- */
+    if (typeof inv.petf !== "number") { inv.petf = 0; inv.petfTimer = ETF_EVERY; inv.petfHistory = []; }
+    // Market price of each ETF (starts at 100) - it moves every 10 seconds even if you hold nothing
+    const CHART_POINTS = 120;   // 120 moves = the last 20 minutes
+    if (!inv.etfPrices)  inv.etfPrices  = [100];
+    if (!inv.petfPrices) inv.petfPrices = [100];
+    const hasBroker = () => state.companies.some(c => c.typeId === "broker");
+    const PETF_MAX = 10000000;   // you can put at most 10M into the Broker ETF
+
+    $("petfBuy").addEventListener("click", () => {
+      if (isPaused() || !hasBroker()) return;
+      if (inv.petf > 0) return investMessage("The Broker ETF has one slot. Cash out first to invest again.");
+      const amount = readAmount("petfAmount");
+      if (amount < ETF_MIN) return investMessage("The Broker ETF needs at least " + fmt(ETF_MIN) + ".");
+      if (amount > PETF_MAX) return investMessage("The Broker ETF accepts at most " + fmt(PETF_MAX) + ".");
+      if (amount > state.money) return investMessage("You don't have that much money.");
+      state.money -= amount;
+      inv.petf = amount;
+      inv.petfTimer = ETF_EVERY;
+      $("petfAmount").value = "";
+      addInvestXp(amount);
+      investMessage("🏦 Invested " + fmt(amount) + " in the Broker ETF.", true);
+      updateCounter(); updateInvestLive(); save();
+    });
+
+    $("petfSell").addEventListener("click", () => {
+      if (isPaused() || inv.petf <= 0) return;
+      const amount = inv.petf;
+      state.money += amount;
+      inv.petf = 0;
+      investMessage("🏦 Cashed out " + fmt(amount) + " from the Broker ETF (no fee).", true);
+      updateCounter(); updateInvestLive(); save();
+    });
+
+    // One Broker ETF move: same odds, bigger wins
+    function petfRoll() {
+      const r = Math.random();
+      if (r < 0.10) return -0.04;
+      if (r < 0.20) return 0.05;
+      return Math.random() < 0.5 ? 0.02 : -0.01;
+    }
+
+    /* ----- Stock chart (SVG line chart with hover) ----- */
+    const CHART_W = 600, CHART_H = 190, PAD_L = 8, PAD_R = 52, PAD_T = 10, PAD_B = 18;
+
+    function chartGeometry(prices) {
+      let min = Math.min(...prices), max = Math.max(...prices);
+      if (max - min < 0.5) { min -= 0.25; max += 0.25; }
+      const pad = (max - min) * 0.08;
+      min -= pad; max += pad;
+      const n = Math.max(prices.length - 1, 1);
+      const x = (i) => PAD_L + (CHART_W - PAD_L - PAD_R) * (i / n);
+      const y = (v) => PAD_T + (CHART_H - PAD_T - PAD_B) * (1 - (v - min) / (max - min));
+      return { min, max, x, y };
+    }
+
+    function drawChart(id, prices) {
+      const box = $(id);
+      if (!box) return;
+      const { min, max, x, y } = chartGeometry(prices);
+      const first = prices[0], last = prices[prices.length - 1];
+      const up = last >= first;
+      const color = up ? "#5be08f" : "#ff6b6b";
+      const change = (last / first - 1) * 100;
+
+      const line = prices.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      const area = `${line} L${x(prices.length - 1).toFixed(1)},${CHART_H - PAD_B} L${x(0).toFixed(1)},${CHART_H - PAD_B} Z`;
+
+      // 4 recessive grid lines with price labels on the right
+      let grid = "";
+      for (let k = 0; k <= 3; k++) {
+        const v = min + (max - min) * (k / 3);
+        grid += `<line x1="${PAD_L}" x2="${CHART_W - PAD_R}" y1="${y(v)}" y2="${y(v)}" stroke="#ffffff" stroke-opacity="0.07"/>
+                 <text x="${CHART_W - PAD_R + 6}" y="${y(v) + 4}" fill="#8d8da3" font-size="11">${v.toFixed(1)}</text>`;
+      }
+      const gradId = id + "Grad";
+      box.innerHTML = `
+        <div class="chartHead"><span>Price · last ${Math.round((prices.length - 1) * ETF_EVERY / 60)} min</span>
+          <span style="color:${color}; font-weight:700">${last.toFixed(2)} (${change >= 0 ? "+" : ""}${change.toFixed(2)}%)</span></div>
+        <svg viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none" role="img" aria-label="ETF price chart">
+          <defs><linearGradient id="${gradId}" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stop-color="${color}" stop-opacity="0.28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
+          </linearGradient></defs>
+          ${grid}
+          <line x1="${PAD_L}" x2="${CHART_W - PAD_R}" y1="${y(first)}" y2="${y(first)}" stroke="#ffffff" stroke-opacity="0.25" stroke-dasharray="4 4"/>
+          <path d="${area}" fill="url(#${gradId})"/>
+          <path d="${line}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+          <circle cx="${x(prices.length - 1)}" cy="${y(last)}" r="4" fill="${color}" stroke="#15161f" stroke-width="2"/>
+          <line class="cross" x1="0" x2="0" y1="${PAD_T}" y2="${CHART_H - PAD_B}" stroke="#ffffff" stroke-opacity="0.4" visibility="hidden"/>
+          <circle class="crossDot" r="4" fill="${color}" stroke="#fff" stroke-width="1.5" visibility="hidden"/>
+        </svg>
+        <div class="chartTip" hidden></div>`;
+      box.dataset.chart = id;
+    }
+
+    // Crosshair + tooltip on hover
+    function chartHover(id, getPrices) {
+      const box = $(id);
+      box.addEventListener("mousemove", (e) => {
+        const svg = box.querySelector("svg");
+        if (!svg) return;
+        const prices = getPrices();
+        const rect = svg.getBoundingClientRect();
+        const sx = (e.clientX - rect.left) / rect.width * CHART_W;
+        const { x, y } = chartGeometry(prices);
+        const n = prices.length - 1;
+        const i = Math.max(0, Math.min(n, Math.round((sx - PAD_L) / (CHART_W - PAD_L - PAD_R) * n)));
+        const cross = svg.querySelector(".cross"), dot = svg.querySelector(".crossDot"), tip = box.querySelector(".chartTip");
+        cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+        dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(prices[i])); dot.setAttribute("visibility", "visible");
+        const move = i > 0 ? (prices[i] / prices[i - 1] - 1) * 100 : 0;
+        const ago = (n - i) * ETF_EVERY;
+        tip.hidden = false;
+        tip.innerHTML = `<b>${prices[i].toFixed(2)}</b> <span class="${move > 0 ? "up" : move < 0 ? "down" : ""}">${i > 0 ? (move > 0 ? "+" : "") + move.toFixed(1) + "%" : "start"}</span>
+                         <span class="muted">· ${ago === 0 ? "now" : Math.floor(ago / 60) + "m " + (ago % 60) + "s ago"}</span>`;
+        tip.style.left = (x(i) / CHART_W * rect.width + (rect.left - box.getBoundingClientRect().left)) + "px";
+        tip.style.top = (y(prices[i]) / CHART_H * rect.height + (rect.top - box.getBoundingClientRect().top)) + "px";
+      });
+      box.addEventListener("mouseleave", () => {
+        const svg = box.querySelector("svg");
+        if (!svg) return;
+        svg.querySelector(".cross").setAttribute("visibility", "hidden");
+        svg.querySelector(".crossDot").setAttribute("visibility", "hidden");
+        box.querySelector(".chartTip").hidden = true;
+      });
+    }
+    chartHover("etfChart", () => inv.etfPrices);
+    chartHover("petfChart", () => inv.petfPrices);
+    drawChart("etfChart", inv.etfPrices);
+    drawChart("petfChart", inv.petfPrices);
+
+    // One market move: returns the % change
+    function etfRoll() {
+      const r = Math.random();
+      if (r < 0.10) return -0.04;
+      if (r < 0.20) return 0.04;
+      return Math.random() < 0.5 ? 0.015 : -0.01;
+    }
+
+    /* ----- Runs every second from the game loop. Returns rent paid (taxable). ----- */
+    function investTick() {
+      let rent = 0;
+      let changed = false;
+
+      // Real estate crash check
+      if (inv.properties.length > 0 && Math.random() < RE_CRASH_CHANCE) {
+        let lost = 0;
+        inv.properties.forEach(p => { lost += p.value * RE_CRASH_LOSS; p.value *= 1 - RE_CRASH_LOSS; });
+        investMessage("🏚️ REAL ESTATE CRASH! Your properties lost " + fmt(lost) + " (70%).");
+        showNotice("🏚️ Real estate crash! Properties lost 70% of their value.");
+        changed = true;
+      }
+
+      inv.properties.forEach(p => {
+        if (p.lock > 0) { p.lock--; if (p.lock === 0) changed = true; }
+        p.rentIn--;
+        if (p.rentIn <= 0) {
+          const r = p.value * RE_RENT_RATE;
+          rent += r;
+          p.rentIn = RE_RENT_EVERY;
+        }
+      });
+      if (rent > 0) { state.money += rent; investMessage("🏠 Rent paid: +" + fmt(rent), true); }
+
+      // ETF market move (the market always moves; your money follows it if invested)
+      inv.etfTimer--;
+      if (inv.etfTimer <= 0) {
+        const move = etfRoll();
+        inv.etf *= 1 + move;
+        inv.etfHistory = [move, ...inv.etfHistory].slice(0, 15);
+        inv.etfPrices = inv.etfPrices.concat(inv.etfPrices[inv.etfPrices.length - 1] * (1 + move)).slice(-CHART_POINTS - 1);
+        inv.etfTimer = ETF_EVERY;
+        drawChart("etfChart", inv.etfPrices);
+      }
+
+      // Broker ETF market move (runs once you own a Brokerage Firm)
+      if (hasBroker()) {
+        inv.petfTimer--;
+        if (inv.petfTimer <= 0) {
+          const move = petfRoll();
+          inv.petf *= 1 + move;
+          inv.petfHistory = [move, ...inv.petfHistory].slice(0, 15);
+          inv.petfPrices = inv.petfPrices.concat(inv.petfPrices[inv.petfPrices.length - 1] * (1 + move)).slice(-CHART_POINTS - 1);
+          inv.petfTimer = ETF_EVERY;
+          drawChart("petfChart", inv.petfPrices);
+        }
+      }
+
+      if (changed) renderProperties();
+      updateInvestLive();
+      return rent;
+    }
+
+    // Update all the numbers on the investing page (no rebuilding, so buttons and inputs keep working)
+    function updateInvestLive() {
+      const reTotal = inv.properties.reduce((a, p) => a + p.value, 0);
+      $("reTotal").textContent = fmt(reTotal);
+      $("etfTotal").textContent = fmt(inv.etf + inv.petf);
+
+      // Broker ETF
+      const broker = hasBroker();
+      $("petfLocked").hidden = broker;
+      $("petfBody").hidden = !broker;
+      $("petfValue").textContent = fmt(inv.petf);
+      $("petfTimer").textContent = inv.petfTimer + "s";
+      $("petfBuyRow").hidden = inv.petf > 0;
+      $("petfSellRow").hidden = inv.petf <= 0;
+      const pl = inv.petfHistory[0];
+      $("petfLast").textContent = pl === undefined ? "–" : (pl > 0 ? "+" : "") + Math.round(pl * 100) + "%";
+      $("petfLast").className = "bigValue " + (pl > 0 ? "up" : pl < 0 ? "down" : "");
+      $("petfHistory").innerHTML = inv.petfHistory.map(m =>
+        `<span class="${m > 0 ? "up" : "down"}">${m > 0 ? "+" : ""}${Math.round(m * 100)}%</span>`).join("");
+      $("investMoney").textContent = fmt(state.money);
+      $("etfValue").textContent = fmt(inv.etf);
+      $("etfTimer").textContent = inv.etfTimer + "s";
+
+      const last = inv.etfHistory[0];
+      $("etfLast").textContent = last === undefined ? "–" : (last > 0 ? "+" : "") + (last * 100) + "%";
+      $("etfLast").className = "bigValue " + (last > 0 ? "up" : last < 0 ? "down" : "");
+      $("etfHistory").innerHTML = inv.etfHistory.map(m =>
+        `<span class="${m > 0 ? "up" : "down"}">${m > 0 ? "+" : ""}${m * 100}%</span>`).join("");
+
+      const sell = Math.min(readAmount("etfSellAmount"), inv.etf);
+      $("etfSellPreview").textContent = sell > 0 ? `You get ${fmt(sell * (1 - etfFee()))} after the ${pct(etfFee())} fee` : "";
+
+      inv.properties.forEach(p => {
+        const v = $("re-value-" + p.id), r = $("re-rent-" + p.id), b = $("re-sell-" + p.id);
+        if (v) v.textContent = fmt(p.value);
+        if (r) r.textContent = clock(p.rentIn);
+        if (b) { b.disabled = p.lock > 0; b.textContent = p.lock > 0 ? "🔒 " + clock(p.lock) : "Sell"; }
+      });
+    }
+
+    /* =====================================================================
+       SETTINGS: save, download / load a progress file, reset
+       ===================================================================== */
+    $("settingsBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      $("settingsMenu").hidden = !$("settingsMenu").hidden;
+    });
+    // click anywhere else closes the menu
+    document.addEventListener("click", (e) => {
+      // (ignore clicks made by code, like the download link)
+      if (e.isTrusted && !e.target.closest("#settingsWrap")) $("settingsMenu").hidden = true;
+    });
+
+    function settingsNote(text) {
+      $("settingsNote").textContent = text;
+      setTimeout(() => { $("settingsNote").textContent = "The game also saves itself every second."; }, 3000);
+    }
+
+    $("settingsMenu").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-setting]");
+      if (!btn) return;
+      const what = btn.dataset.setting;
+
+      if (what === "save") {
+        save();
+        settingsNote("✅ Game saved!");
+      }
+
+      if (what === "download") {
+        save();
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "coin-clicker-save-" + new Date().toISOString().slice(0, 10) + ".json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        settingsNote("⬇️ Progress file downloaded.");
+      }
+
+      if (what === "load") $("loadFile").click();
+
+      if (what === "reset") {
+        $("settingsMenu").hidden = true;
+        showModal(`<h2>🗑️ Reset game?</h2>
+                   <p>This deletes <b>all</b> your progress: money, businesses, levels and investments.</p>
+                   <p class="muted">Tip: download your progress file first if you might want it back.</p>
+                   <div class="row">
+                     <button class="btn ghost big" data-modal="close">Cancel</button>
+                     <button class="btn big dangerBtn" data-modal="confirmReset">Yes, reset everything</button>
+                   </div>`);
+      }
+    });
+
+    // Load a progress file: check it, store it, restart with it
+    $("loadFile").addEventListener("change", () => {
+      const file = $("loadFile").files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (typeof data.money !== "number" || !Array.isArray(data.companies)) throw new Error("not a save");
+          stopSaving = true;
+          localStorage.setItem("coinClickerSave", JSON.stringify(data));
+          location.reload();
+        } catch (err) {
+          settingsNote("❌ That file is not a Coin Clicker save.");
+        }
+        $("loadFile").value = "";
+      };
+      reader.readAsText(file);
+    });
+
+    // Make the game state reachable from the browser console (F12) for testing
+    window.state = state;
+
+    // Start
+    updateCounter();
+    updateDebt();
+    render();
+    renderCasino();
+    updateCasinoLevel();
+    updateInvestLevel();
+    renderProperties();
+    updateInvestLive();
+    showView(["casino", "invest"].includes(state.view) ? state.view : "income");
+    if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
+    else if (state.pendingTaxId !== null) {
+      const d = state.taxDebts.find(x => x.id === state.pendingTaxId);
+      if (d) showPaymentPopup(d); else state.pendingTaxId = null;
+    }
+  </script>
+</body>
+</html>

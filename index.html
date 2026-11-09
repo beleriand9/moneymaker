@@ -342,13 +342,21 @@
     #boosters { position: absolute; left: 24px; top: 50%; transform: translateY(-50%); z-index: 5;
                 display: flex; flex-direction: column; gap: 22px; }
     .booster { position: relative; }
-    #energyBtn, #pillBtn {
+    #energyBtn, #pillBtn, #influenceBtn {
       position: relative; background: rgba(255, 255, 255, 0.05); border: 1px solid #555566; border-radius: 14px;
       padding: 8px 12px; cursor: pointer; transition: transform 0.1s;
     }
     #energyBtn:hover:not(.cantAfford) { border-color: #1fbf5a; transform: scale(1.06); }
     #pillBtn:hover:not(.cantAfford) { border-color: #64b5f6; transform: scale(1.06); }
-    #energyBtn.cantAfford, #pillBtn.cantAfford { opacity: 0.45; cursor: not-allowed; }
+    #energyBtn.cantAfford, #pillBtn.cantAfford, #influenceBtn.cantAfford { opacity: 0.45; cursor: not-allowed; }
+    #influenceBtn:hover:not(.cantAfford) { border-color: #ffd34d; transform: scale(1.06); }
+    #influenceBtn.active { border-color: #ffd34d; box-shadow: 0 0 18px rgba(255, 211, 77, 0.6); animation: hatPulse 1s ease-in-out infinite; }
+    @keyframes hatPulse { 50% { box-shadow: 0 0 30px rgba(255, 211, 77, 0.95); } }
+    #influenceTimer {
+      position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+      background: #ffd34d; color: #2b2100; font-weight: 800; font-size: 12px; padding: 1px 8px; border-radius: 999px;
+    }
+    #influenceTimer.cooldown { background: #555566; color: #e0e0ea; }
     #pillBtn.active { border-color: #64b5f6; box-shadow: 0 0 18px rgba(100, 181, 246, 0.6); animation: pillPulse 1s ease-in-out infinite; }
     @keyframes pillPulse { 50% { box-shadow: 0 0 28px rgba(160, 120, 255, 0.9); } }
     #pillTimer {
@@ -363,14 +371,15 @@
     }
     #energyTimer.cooldown, #pillTimer.cooldown { background: #555566; color: #e0e0ea; }
     #energyTimer, #pillTimer { white-space: nowrap; }
-    #energyTip, #pillTip {
+    #energyTip, #pillTip, #influenceTip {
       display: none; position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%);
       width: 230px; background: #2b2d42; border: 1px solid #555566; border-radius: 10px; padding: 10px 12px;
       font-size: 13px; line-height: 1.4; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     }
     #energyWrap:hover #energyTip, #energyBtn:focus-visible + #energyTip,
-    #pillWrap:hover #pillTip, #pillBtn:focus-visible + #pillTip { display: block; }
-    @media (max-width: 800px) { #boosters { top: 20px; transform: none; left: 16px; } #energyTip, #pillTip { top: 0; transform: none; } }
+    #pillWrap:hover #pillTip, #pillBtn:focus-visible + #pillTip,
+    #influenceWrap:hover #influenceTip, #influenceBtn:focus-visible + #influenceTip { display: block; }
+    @media (max-width: 800px) { #boosters { top: 20px; transform: none; left: 16px; } #energyTip, #pillTip, #influenceTip { top: 0; transform: none; } }
 
     /* ================= Money counter ================= */
     #counter {
@@ -625,6 +634,31 @@
         <span id="pillPreview" class="muted"></span><br>
         Click the pill to buy it for <b>2,000</b>.
         <div class="muted" style="margin-top:4px">After it wears off: 5-minute cooldown. Works together with the energy drink (×5 on the whole click).</div>
+      </div>
+    </div>
+
+    <div id="influenceWrap" class="booster">
+      <button id="influenceBtn" aria-describedby="influenceTip" aria-label="Political influence: doubles income from all businesses for 1 minute, costs 500,000">
+        <svg viewBox="0 0 56 48" width="52" height="46" aria-hidden="true">
+          <ellipse cx="28" cy="40" rx="26" ry="6" fill="#1b1b22"/>
+          <ellipse cx="28" cy="39" rx="26" ry="5" fill="#2b2b36"/>
+          <rect x="13" y="6" width="30" height="33" rx="3" fill="#24242e"/>
+          <rect x="13" y="6" width="30" height="33" rx="3" fill="url(#hatShine)"/>
+          <ellipse cx="28" cy="6" rx="15" ry="3.5" fill="#33333f"/>
+          <rect x="13" y="28" width="30" height="7" fill="#b71c1c"/>
+          <rect x="23" y="28" width="8" height="7" rx="1" fill="#ffd34d"/>
+          <defs><linearGradient id="hatShine" x1="0" x2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity="0.18"/><stop offset="0.3" stop-color="#fff" stop-opacity="0"/>
+            <stop offset="1" stop-color="#000" stop-opacity="0.3"/></linearGradient></defs>
+        </svg>
+        <span id="influenceTimer" hidden></span>
+      </button>
+      <div id="influenceTip" role="tooltip">
+        <b>🎩 Political influence</b><br>
+        <b>Doubles the income of all your businesses</b> for <b>1 minute</b>.<br>
+        <span id="influencePreview" class="muted"></span><br>
+        Click the hat to buy it for <b>500,000</b>.
+        <div class="muted" style="margin-top:4px">After it wears off: 30-minute cooldown.</div>
       </div>
     </div>
     </div>
@@ -1265,6 +1299,9 @@
         total -= stolen;
         result.flash = "🦹 The embezzler stole " + fmt(stolen) + "!";
       }
+
+      // Political influence doubles all business income
+      if (state.influenceLeft > 0) total *= 2;
 
       result.total = total;
       result.perWorker = earn;
@@ -3153,6 +3190,14 @@
     if (typeof state.pillLeft !== "number") state.pillLeft = 0;
     const pillActive = () => state.pillLeft > 0;
 
+    // ----- Political influence: costs 500k, all businesses earn double for 60 s, 30 min cooldown -----
+    const INFLUENCE_PRICE = 500000;
+    const INFLUENCE_SECONDS = 60;
+    const INFLUENCE_COOLDOWN = 1800;
+    if (typeof state.influenceLeft !== "number") state.influenceLeft = 0;
+    if (typeof state.influenceCooldown !== "number") state.influenceCooldown = 0;
+    var influenceActive = () => state.influenceLeft > 0;
+
     const energyActive = () => state.energyLeft > 0;
     // A click: 1 bcoin, plus 20% of your income per second while a pill is active,
     // and the energy drink multiplies the whole click by 5
@@ -3164,6 +3209,16 @@
     };
 
     function updateEnergy() {
+      // political influence
+      const hat = $("influenceBtn");
+      hat.classList.toggle("active", influenceActive());
+      hat.classList.toggle("cantAfford", !influenceActive() && (state.money < INFLUENCE_PRICE || state.influenceCooldown > 0));
+      $("influenceTimer").hidden = !influenceActive() && state.influenceCooldown === 0;
+      $("influenceTimer").textContent = influenceActive() ? state.influenceLeft + "s" : "⏳ " + clock(state.influenceCooldown);
+      $("influenceTimer").classList.toggle("cooldown", !influenceActive());
+      const base = Math.max(0, (state.lastIncome || 0) / (influenceActive() ? 2 : 1));
+      $("influencePreview").textContent = "Right now that's about +" + fmt(base * INFLUENCE_SECONDS) + " extra over the minute.";
+
       // magical pill
       const pill = $("pillBtn");
       pill.classList.toggle("active", pillActive());
@@ -3187,6 +3242,8 @@
       else if (state.energyCooldown > 0) state.energyCooldown--;
       if (state.pillLeft > 0) { state.pillLeft--; if (state.pillLeft === 0) state.pillCooldown = PILL_COOLDOWN; }
       else if (state.pillCooldown > 0) state.pillCooldown--;
+      if (state.influenceLeft > 0) { state.influenceLeft--; if (state.influenceLeft === 0) state.influenceCooldown = INFLUENCE_COOLDOWN; }
+      else if (state.influenceCooldown > 0) state.influenceCooldown--;
       updateEnergy();
     }
 
@@ -3198,6 +3255,17 @@
       state.money -= ENERGY_PRICE;
       state.energyLeft = ENERGY_SECONDS;
       showNotice("⚡ Energy drink! Clicks are worth ×" + ENERGY_MULTIPLIER + " for " + state.energyLeft + " seconds.");
+      updateCounter(); updateEnergy(); save();
+    });
+
+    $("influenceBtn").addEventListener("click", () => {
+      if (isPaused()) return;
+      if (influenceActive()) { showNotice("🎩 Your political influence is already working (" + state.influenceLeft + "s left)."); return; }
+      if (state.influenceCooldown > 0) { showNotice("⏳ Political influence cooldown: " + clock(state.influenceCooldown) + " left."); return; }
+      if (state.money < INFLUENCE_PRICE) { showNotice("You need " + fmt(INFLUENCE_PRICE) + " bcoins for political influence."); return; }
+      state.money -= INFLUENCE_PRICE;
+      state.influenceLeft = INFLUENCE_SECONDS;
+      showNotice("🎩 Political influence bought! All businesses earn double for 1 minute.");
       updateCounter(); updateEnergy(); save();
     });
 

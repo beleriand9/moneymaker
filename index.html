@@ -713,6 +713,9 @@
         Min. 1,000 per investment. Cash-out fee: <span id="etfFeeInline"></span> (lower with every investor level).</div>
       <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
         <div><div class="muted">Your ETF</div><div class="bigValue" id="etfValue">0</div></div>
+        <div><div class="muted">Invested</div><div class="bigValue" id="etfInvested">0</div></div>
+        <div><div class="muted">Profit / loss</div><div class="bigValue" id="etfPL">–</div>
+          <div class="muted" id="etfPLFee" style="font-size:12px"></div></div>
         <div><div class="muted">Last move</div><div class="bigValue" id="etfLast">–</div></div>
         <div><div class="muted">Next move in</div><div class="bigValue" id="etfTimer">10s</div></div>
       </div>
@@ -744,6 +747,8 @@
       <div id="petfBody" hidden>
         <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
           <div><div class="muted">Your Broker ETF</div><div class="bigValue" id="petfValue">0</div></div>
+          <div><div class="muted">Invested</div><div class="bigValue" id="petfInvested">0</div></div>
+          <div><div class="muted">Profit / loss</div><div class="bigValue" id="petfPL">–</div></div>
           <div><div class="muted">Last move</div><div class="bigValue" id="petfLast">–</div></div>
           <div><div class="muted">Next move in</div><div class="bigValue" id="petfTimer">–</div></div>
         </div>
@@ -2372,6 +2377,7 @@
       if (amount > state.money) return investMessage("You don't have that much money.");
       state.money -= amount;
       inv.etf += amount;
+      inv.etfInvested += amount;
       $("etfAmount").value = "";
       addInvestXp(amount);
       investMessage("📊 Invested " + fmt(amount) + " in the ETF.", true);
@@ -2383,8 +2389,9 @@
       amount = Math.min(amount, inv.etf);
       if (amount <= 0) return investMessage("Nothing to cash out.");
       const fee = amount * etfFee();
+      inv.etfInvested *= 1 - amount / inv.etf;   // cashing out part also takes out that part of what you invested
       inv.etf -= amount;
-      if (inv.etf < 0.5) inv.etf = 0;
+      if (inv.etf < 0.5) { inv.etf = 0; inv.etfInvested = 0; }
       state.money += amount - fee;
       $("etfSellAmount").value = "";
       investMessage(`Cashed out ${fmt(amount)} (fee ${fmt(fee)}): +${fmt(amount - fee)} to your money.`, true);
@@ -2396,6 +2403,9 @@
 
     /* ----- Broker ETF (needs a Brokerage Firm): no fee, one slot ----- */
     if (typeof inv.petf !== "number") { inv.petf = 0; inv.petfTimer = ETF_EVERY; inv.petfHistory = []; }
+    // How much you put in (to show profit / loss). Old saves: count the current value as invested.
+    if (typeof inv.etfInvested !== "number") inv.etfInvested = inv.etf;
+    if (typeof inv.petfInvested !== "number") inv.petfInvested = inv.petf;
     // Market price of each ETF (starts at 100) - it moves every 10 seconds even if you hold nothing
     const CHART_POINTS = 120;   // 120 moves = the last 20 minutes
     if (!inv.etfPrices)  inv.etfPrices  = [100];
@@ -2412,6 +2422,7 @@
       if (amount > state.money) return investMessage("You don't have that much money.");
       state.money -= amount;
       inv.petf = amount;
+      inv.petfInvested = amount;
       inv.petfTimer = ETF_EVERY;
       $("petfAmount").value = "";
       addInvestXp(amount);
@@ -2424,6 +2435,7 @@
       const amount = inv.petf;
       state.money += amount;
       inv.petf = 0;
+      inv.petfInvested = 0;
       investMessage("🏦 Cashed out " + fmt(amount) + " from the Broker ETF (no fee).", true);
       updateCounter(); updateInvestLive(); save();
     });
@@ -2587,6 +2599,17 @@
       return rent;
     }
 
+    // Show "Invested" and "Profit / loss" (green when up, red when down)
+    function showPL(prefix, value, invested) {
+      $(prefix + "Invested").textContent = fmt(invested);
+      const el = $(prefix + "PL");
+      if (invested <= 0) { el.textContent = "–"; el.className = "bigValue"; return; }
+      const pl = value - invested;
+      const p = pl / invested * 100;
+      el.textContent = `${pl >= 0 ? "+" : "−"}${fmt(Math.abs(pl))} (${pl >= 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%)`;
+      el.className = "bigValue " + (pl > 0 ? "up" : pl < 0 ? "down" : "");
+    }
+
     // Update all the numbers on the investing page (no rebuilding, so buttons and inputs keep working)
     function updateInvestLive() {
       const reTotal = inv.properties.reduce((a, p) => a + p.value, 0);
@@ -2598,6 +2621,7 @@
       $("petfLocked").hidden = broker;
       $("petfBody").hidden = !broker;
       $("petfValue").textContent = fmt(inv.petf);
+      showPL("petf", inv.petf, inv.petfInvested);
       $("petfTimer").textContent = inv.petfTimer + "s";
       $("petfBuyRow").hidden = inv.petf > 0;
       $("petfSellRow").hidden = inv.petf <= 0;
@@ -2608,6 +2632,9 @@
         `<span class="${m > 0 ? "up" : "down"}">${m > 0 ? "+" : ""}${Math.round(m * 100)}%</span>`).join("");
       $("investMoney").textContent = fmt(state.money);
       $("etfValue").textContent = fmt(inv.etf);
+      showPL("etf", inv.etf, inv.etfInvested);
+      const afterFee = inv.etf * (1 - etfFee()) - inv.etfInvested;
+      $("etfPLFee").textContent = inv.etf > 0 ? `after ${pct(etfFee())} cash-out fee: ${afterFee >= 0 ? "+" : "−"}${fmt(Math.abs(afterFee))}` : "";
       $("etfTimer").textContent = inv.etfTimer + "s";
 
       const last = inv.etfHistory[0];

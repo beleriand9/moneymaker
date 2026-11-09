@@ -2643,8 +2643,26 @@
         t.dealer.push(c); renderBlackjack(); await sleep(bjDelay());
       }
 
-      // Dealer peeks for blackjack when showing an Ace or a 10
+      // Dealer shows an Ace: offer insurance before checking for blackjack
       const up = t.dealer[0];
+      t.insurance = 0;
+      if (up.r === "A") {
+        t.phase = "insurance";
+        t.busy = false;
+        renderBlackjack();
+        const take = await new Promise(resolve => { t.insuranceResolve = resolve; });
+        t.insuranceResolve = null;
+        t.busy = true;
+        if (take) {
+          const cost = insuranceCost(t);
+          state.casinoChips -= cost;
+          state.bj[t.id].inPlay += cost;
+          t.insurance = cost;
+        }
+        updateCounter(); save();
+      }
+
+      // Dealer peeks for blackjack when showing an Ace or a 10
       if (cardValue(up) >= 10 && handValue(t.dealer).total === 21) {
         t.dealer[1].hidden = false;
         t.message = "Dealer has blackjack!";
@@ -2658,6 +2676,13 @@
       t.busy = false;
       bjNextHand(t);
     }
+
+    // Insurance costs half of all your bets and pays 2:1 if the dealer has blackjack
+    const insuranceCost = (t) => t.hands.reduce((a, h) => a + h.bet, 0) / 2;
+    const bjCanSurrender = (t) => {
+      const h = t.hands[t.active];
+      return h && h.cards.length === 2 && !h.fromSplit;
+    };
 
     // Move to the next hand that still needs a decision, or let the dealer play
     function bjNextHand(t) {
@@ -2689,6 +2714,7 @@
         if (handValue(h.cards).total >= 21) h.done = true;
       }
       if (action === "stand") h.done = true;
+      if (action === "surrender" && bjCanSurrender(t)) { h.surrendered = true; h.done = true; }
       if (action === "double" && bjCanDouble(t)) {
         state.casinoChips -= h.bet;
         state.bj[t.id].inPlay += h.bet;
@@ -2730,7 +2756,7 @@
       renderBlackjack(); await sleep(bjDelay() * 1.5);
 
       // The dealer only draws if at least one hand is still in the game
-      const someoneAlive = t.hands.some(h => handValue(h.cards).total <= 21 && !isBlackjack(h));
+      const someoneAlive = t.hands.some(h => handValue(h.cards).total <= 21 && !isBlackjack(h) && !h.surrendered);
       if (someoneAlive) {
         while (handValue(t.dealer).total < 17) {            // stands on all 17s, including soft 17
           t.dealer.push(draw(t)); renderBlackjack(); await sleep(bjDelay() * 1.5);
@@ -2743,6 +2769,7 @@
     function bjPayout(hand, dealerCards) {
       const p = handValue(hand.cards).total, d = handValue(dealerCards).total;
       const dealerBJ = dealerCards.length === 2 && d === 21;
+      if (hand.surrendered) return { result: "Surrendered", back: hand.bet / 2 };   // half the bet back
       if (p > 21) return { result: "Bust", back: 0 };
       if (isBlackjack(hand) && !dealerBJ) return { result: "Blackjack!", back: hand.bet * 2.5 };
       if (dealerBJ && !isBlackjack(hand)) return { result: "Lose", back: 0 };
@@ -2758,7 +2785,17 @@
         const r = bjPayout(h, t.dealer);
         h.result = r.result; h.back = r.back;
         wagered += h.bet; back += r.back;
-        if (r.back === 0) lost += h.bet;
+        if (r.back < h.bet) lost += h.bet - r.back;    // lost part (a surrender loses half)
+      }
+
+      // Insurance: pays 2:1 (you get 3x the insurance back) if the dealer has blackjack
+      let insuranceText = "";
+      if (t.insurance > 0) {
+        const dealerBJ = t.dealer.length === 2 && handValue(t.dealer).total === 21;
+        wagered += t.insurance;
+        if (dealerBJ) { back += t.insurance * 3; insuranceText = `🛡️ Insurance paid ${fmt(t.insurance * 2)}!`; }
+        else { lost += t.insurance; insuranceText = `🛡️ Insurance lost (${fmt(t.insurance)}).`; }
+        t.insurance = 0;
       }
       const cashback = lost * cashbackRate();     // level cashback on lost hands
       state.casinoChips += back + cashback;
@@ -2766,7 +2803,7 @@
       const levelsGained = addXp(wagered);         // 1 XP per bcoin bet (doubles and splits count)
 
       const net = back - wagered;
-      t.message = (t.message ? t.message + " " : "") +
+      t.message = (t.message ? t.message + " " : "") + (insuranceText ? insuranceText + " " : "") +
         (net > 0 ? `You won ${fmt(net)}!` : net < 0 ? `You lost ${fmt(-net)}.` : "Your money back (push).") +
         (cashback > 0 ? ` Cashback +${cashback.toLocaleString(undefined, { maximumFractionDigits: 1 })}.` : "") +
         (levelsGained > 0 ? ` 🎉 Level up! Now level ${levelInfo(state.casinoXp).level}.` : "");
@@ -2810,7 +2847,7 @@
         }
         if (!(betting && bets[seat] > 0)) {
           inner += hands.map(({ h, i }) => {
-            const resCls = !h.result ? "" : h.back > h.bet ? "win" : h.back === h.bet ? "push" : "lose";
+            const resCls = !h.result ? "" : h.back > h.bet ? "win" : h.back > 0 ? "push" : "lose";
             return `<div class="bjHand ${i === t.active ? "active" : ""}">
                       <div class="cardsRow">${h.cards.map(cardHtml).join("")}</div>
                       ${totalHtml(h.cards, h.fromSplit)}
@@ -2832,13 +2869,20 @@
           <button class="btn" data-bj="deal" ${total === 0 ? "disabled" : ""}>🃏 Deal (bet ${fmt(total)})</button>
           <button class="btn ghost" data-bj="clear" ${total === 0 ? "disabled" : ""}>Clear bets</button>
           <button class="btn ghost" data-bj="rebet" ${lastTotal === 0 ? "disabled" : ""}>↺ Repeat last bets</button>`;
+      } else if (t.phase === "insurance") {
+        const cost = insuranceCost(t);
+        actions = `
+          <span class="muted" style="align-self:center">Dealer shows an Ace. Insurance pays 2:1 if the dealer has blackjack.</span>
+          <button class="btn" data-bj="insYes" ${state.casinoChips >= cost ? "" : "disabled"}>🛡️ Take insurance (${fmt(cost)})</button>
+          <button class="btn ghost" data-bj="insNo">No insurance</button>`;
       } else {
         const playing = t.phase === "playing" && !t.busy;
         actions = `
           <button class="btn" data-bj="hit" ${playing ? "" : "disabled"}>Hit</button>
           <button class="btn" data-bj="stand" ${playing ? "" : "disabled"}>Stand</button>
           <button class="btn ghost" data-bj="double" ${playing && bjCanDouble(t) ? "" : "disabled"}>Double</button>
-          <button class="btn ghost" data-bj="split" ${playing && bjCanSplit(t) ? "" : "disabled"}>Split</button>`;
+          <button class="btn ghost" data-bj="split" ${playing && bjCanSplit(t) ? "" : "disabled"}>Split</button>
+          <button class="btn ghost" data-bj="surrender" ${playing && bjCanSurrender(t) ? "" : "disabled"}>🏳️ Surrender</button>`;
       }
 
       $("casinoGame").innerHTML = `
@@ -2864,7 +2908,7 @@
           </div>
           <div class="bjActions">${actions}</div>
           <div id="casinoMsg" class="${/won|money back/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
-          <div class="muted" style="margin-top:6px; text-align:center">Double on any first two cards · Split once per seat (split aces get one card) · Dealer checks for blackjack with an Ace or 10 showing</div>
+          <div class="muted" style="margin-top:6px; text-align:center">Double on any first two cards · Split once per seat (split aces get one card) · Surrender a first-two-card hand for half your bet back · Insurance pays 2:1 when the dealer shows an Ace</div>
         </div>`;
 
       // cards only animate the first time they appear
@@ -2914,7 +2958,8 @@
         t.hands = []; t.dealer = []; t.message = "";
         updateCounter(); renderBlackjack(); save();
       }
-      if (["hit", "stand", "double", "split"].includes(a)) bjAction(a);
+      if (["hit", "stand", "double", "split", "surrender"].includes(a)) bjAction(a);
+      if ((a === "insYes" || a === "insNo") && t.insuranceResolve) t.insuranceResolve(a === "insYes");
     });
 
     // Make the game state reachable from the browser console (F12) for testing

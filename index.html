@@ -638,7 +638,7 @@
     </div>
 
     <div id="influenceWrap" class="booster">
-      <button id="influenceBtn" aria-describedby="influenceTip" aria-label="Political influence: doubles income from all businesses for 1 minute, costs 500,000">
+      <button id="influenceBtn" aria-describedby="influenceTip" aria-label="Political influence: doubles income from all businesses for 1 minute, costs 250,000">
         <svg viewBox="0 0 56 48" width="52" height="46" aria-hidden="true">
           <ellipse cx="28" cy="40" rx="26" ry="6" fill="#1b1b22"/>
           <ellipse cx="28" cy="39" rx="26" ry="5" fill="#2b2b36"/>
@@ -657,7 +657,7 @@
         <b>🎩 Political influence</b><br>
         <b>Doubles the income of all your businesses</b> for <b>1 minute</b>.<br>
         <span id="influencePreview" class="muted"></span><br>
-        Click the hat to buy it for <b>500,000</b>.
+        Click the hat to buy it for <b>250,000</b>.
         <div class="muted" style="margin-top:4px">After it wears off: 30-minute cooldown.</div>
       </div>
     </div>
@@ -3190,8 +3190,8 @@
     if (typeof state.pillLeft !== "number") state.pillLeft = 0;
     const pillActive = () => state.pillLeft > 0;
 
-    // ----- Political influence: costs 500k, all businesses earn double for 60 s, 30 min cooldown -----
-    const INFLUENCE_PRICE = 500000;
+    // ----- Political influence: costs 250k, all businesses earn double for 60 s, 30 min cooldown -----
+    const INFLUENCE_PRICE = 250000;
     const INFLUENCE_SECONDS = 60;
     const INFLUENCE_COOLDOWN = 1800;
     if (typeof state.influenceLeft !== "number") state.influenceLeft = 0;

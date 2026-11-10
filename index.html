@@ -4247,11 +4247,13 @@
     }
 
     function uthMsg(text) { if (uth) { uth.message = text; renderUth(); } }
+    // Take the finished round off the table (when you clear or start placing new bets)
+    function uthClearTable(t) { t.hands = []; t.dealer = []; t.board = []; t.dealerHand = ""; }
 
     function renderUth() {
       const t = uth, betting = t.phase === "betting";
       const seats = uthSeats(t);
-      const freshRound = betting && seats.some(s => s.ante > 0 || s.trips > 0);   // new bets placed: clear the old cards
+      const freshRound = betting && t.hands.length === 0;   // nothing dealt yet (or the last round was cleared)
       const showCards = !freshRound;
       const slotCard = `<div class="pcard slot"></div>`;
       const cardsOf = (arr, n) => { let h = arr.map(cardHtml).join(""); for (let i = arr.length; i < n; i++) h += slotCard; return h; };
@@ -4295,7 +4297,7 @@
         const last = t.lastBets ? uthCost(t.lastBets) : 0;
         actions = `
           <button class="btn" data-uth="deal" ${seats.some(s => s.ante >= t.min) && !t.busy ? "" : "disabled"}>🤠 Deal (bet ${fmt(total)})</button>
-          <button class="btn ghost" data-uth="clear" ${total ? "" : "disabled"}>Clear bets</button>
+          <button class="btn ghost" data-uth="clear" ${total || t.hands.length ? "" : "disabled"}>Clear bets</button>
           <button class="btn ghost" data-uth="rebet" ${last ? "" : "disabled"}>↺ Repeat last bets${last ? " (" + fmt(last) + ")" : ""}</button>`;
       } else if (t.active >= 0 && !t.busy) {
         const h = t.hands[t.active];
@@ -4384,6 +4386,7 @@
           state.casinoChips -= v; s.trips += v;
         }
         t.message = "";
+        uthClearTable(t);
         updateCounter(); renderUth(); save();
         return;
       }
@@ -4395,6 +4398,7 @@
       if (a === "clear" && t.phase === "betting") {
         state.casinoChips += uthCost(uthSeats(t));
         state.uth[t.id].seats = [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }];
+        uthClearTable(t);
         t.message = ""; updateCounter(); renderUth(); save();
       }
       if (a === "rebet" && t.phase === "betting" && t.lastBets) {
@@ -4403,6 +4407,7 @@
         if (state.casinoChips < need) return uthMsg("Not enough chips to repeat (" + fmt(need) + " needed).");
         state.casinoChips -= need;
         t.lastBets.forEach((b, i) => { seats[i].ante += b.ante; seats[i].trips += b.trips; });
+        uthClearTable(t);
         t.message = ""; updateCounter(); renderUth(); save();
       }
       if (t.phase === "playing" && (a.startsWith("raise") || a === "check" || a === "fold")) uthAction(a);

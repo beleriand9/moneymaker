@@ -375,6 +375,23 @@
     .spot.zsplit { height: 20%; }   /* the three splits on the zero */
     .spot.corner { right: -11px; bottom: -11px; width: 19px; height: 19px; z-index: 4; } /* corner / six line */
 
+    /* ================= Currency info ================= */
+    #currencyInfo { position: absolute; top: 16px; right: 16px; z-index: 6; }
+    #currencyBtn {
+      background: rgba(255, 255, 255, 0.06); color: #c9c9d6; border: 1px solid #555566; border-radius: 999px;
+      padding: 5px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: help;
+    }
+    #currencyBtn:hover, #currencyBtn:focus-visible { border-color: #ffd34d; color: #ffd34d; }
+    #currencyTip {
+      display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 290px;
+      background: #2b2d42; border: 1px solid #555566; border-radius: 10px; padding: 12px 14px;
+      font-size: 13px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    #currencyInfo:hover #currencyTip, #currencyBtn:focus-visible + #currencyTip { display: block; }
+    #currencyTip table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    #currencyTip td { padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); vertical-align: top; }
+    #currencyTip td:first-child { white-space: nowrap; padding-right: 10px; color: #ffd34d; }
+
     /* ================= Energy drink ================= */
     #boosters { position: absolute; left: 24px; top: 50%; transform: translateY(-50%); z-index: 5;
                 display: flex; flex-direction: column; gap: 22px; }
@@ -632,6 +649,21 @@
   <div id="incomeView">
   <!-- ===== Left side: the coin ===== -->
   <main id="game">
+    <!-- Currency info (hover) -->
+    <div id="currencyInfo">
+      <button id="currencyBtn" aria-describedby="currencyTip" aria-label="Currency info">💱 Coins</button>
+      <div id="currencyTip" role="tooltip">
+        <b>💱 How the coins work</b>
+        <table>
+          <tr><td>1 <b>bcoin</b></td><td>the basic coin</td></tr>
+          <tr><td>1 <b>scoin</b></td><td>= 1,000,000 bcoin</td></tr>
+          <tr><td>1 <b>gcoin</b></td><td>= 1,000,000 scoin<br><span class="muted">= 1,000,000,000,000 bcoin</span></td></tr>
+        </table>
+        <div class="muted">Money is always shown in the biggest coin that fits, so 3,400,000 bcoin shows as 3.4 scoin.
+          Hover over your money to see the exact amount in bcoin.</div>
+      </div>
+    </div>
+
     <!-- Boosters you can buy -->
     <div id="boosters">
     <div id="energyWrap" class="booster">

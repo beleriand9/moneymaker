@@ -319,6 +319,56 @@
     .odds span { background: rgba(0,0,0,0.35); padding: 3px 10px; border-radius: 999px; }
     .shield { display: inline-block; background: #ffd34d; color: #3e2b00; border-radius: 999px; padding: 2px 10px; font-weight: 800; font-size: 13px; }
     .ladder { display: flex; flex-direction: column-reverse; gap: 3px; }
+    /* drawn balls shown as balloons */
+    .balloonRow { display: flex; flex-wrap: wrap; gap: 8px 6px; justify-content: center; margin-top: 14px; min-height: 52px; }
+    .balloon {
+      position: relative; width: 26px; height: 32px; margin-bottom: 14px;
+      border-radius: 50% 50% 48% 48% / 55% 55% 45% 45%;
+      box-shadow: inset -4px -5px 8px rgba(0, 0, 0, 0.25);
+    }
+    .balloon::before {   /* knot */
+      content: ""; position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%);
+      border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid currentColor;
+    }
+    .balloon::after {    /* string */
+      content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 14px; background: rgba(255, 255, 255, 0.6);
+      margin-top: 3px;
+    }
+    .balloon.g { color: #0b6b2f; background: radial-gradient(circle at 32% 28%, #e3ffe9 0%, #3ddc76 30%, #1fbf5a 60%, #0b6b2f 100%); }
+    .balloon.r { color: #7a1010; background: radial-gradient(circle at 32% 28%, #ffe3e3 0%, #ff6b6b 30%, #e53935 60%, #7a1010 100%); }
+    .balloon.d { color: #b07a00; background: radial-gradient(circle at 32% 28%, #fffbe0 0%, #ffe066 30%, #ffd34d 60%, #b07a00 100%);
+                 box-shadow: 0 0 12px #ffd34d, inset -4px -5px 8px rgba(0, 0, 0, 0.2); }
+    .balloon.new { animation: floatIn 0.6s ease-out; }
+    @keyframes floatIn { from { transform: translateY(40px) scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+    .balloon.absorbed { opacity: 0.45; filter: grayscale(0.6); }
+    .balloon.absorbed::before { content: "🛡️"; border: none; font-size: 12px; bottom: auto; top: 6px; }
+    .balloon.popped { background: none; box-shadow: none; }
+    .balloon.popped::before { content: "💥"; border: none; font-size: 24px; bottom: auto; top: 2px; }
+    .balloon.popped::after { display: none; }
+
+    /* betting circle with decision buttons around it */
+    .climbTable { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin-top: 16px; }
+    .betCircle {
+      width: 112px; height: 112px; border-radius: 50%; margin: 0 auto;
+      border: 3px dashed rgba(255, 255, 255, 0.75); background: rgba(10, 20, 50, 0.35);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      color: #fff; font-size: 12px; text-align: center; box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.3);
+    }
+    .betCircle.live { border-style: solid; border-color: #ffd34d; box-shadow: 0 0 18px rgba(255, 211, 77, 0.5); }
+    .betCircle .chipMark { width: 46px; height: 46px; font-size: 12px; }
+    .betCircle b { font-size: 13px; }
+    .decision {
+      width: 96px; height: 96px; border-radius: 50%; border: none; cursor: pointer; justify-self: center;
+      font: inherit; font-weight: 800; font-size: 13px; line-height: 1.2; color: #2b2100; padding: 6px;
+      background: radial-gradient(circle at 35% 30%, #fff1b0, #ffd34d 60%, #c99600); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    }
+    .decision small { display: block; font-size: 11px; font-weight: 700; }
+    .decision:hover:not(:disabled) { transform: scale(1.05); }
+    .decision:disabled { filter: grayscale(1); opacity: 0.45; cursor: not-allowed; }
+    .decision.main { grid-column: 2; width: 120px; height: 52px; border-radius: 999px; margin-top: 2px; }
+    .climbTable .spacer { grid-column: 1; }
+    @media (max-width: 760px) { .decision { width: 80px; height: 80px; font-size: 12px; } }
+
     .rung {
       display: flex; justify-content: space-between; padding: 3px 10px; border-radius: 6px; font-size: 13px;
       background: rgba(255,255,255,0.05); color: #c9c9d6;
@@ -3827,18 +3877,21 @@
         center = `<div class="big">🎈 Sky Climb</div><div>Place a bet and start climbing!</div>`;
       }
 
-      let actions;
+      // Betting circle in the middle, decisions on both sides, main action below
+      let table;
       if (climb.active) {
         const can = !climb.busy && climb.step > 0;
-        actions = `
-          <button class="btn" data-climb="draw" ${climb.busy ? "disabled" : ""}>🎈 Draw a ball</button>
-          <button class="btn" data-climb="cash" ${can ? "" : "disabled"}>💰 Cash out ${climb.step > 0 ? fmt(climbValue()) : ""}</button>
-          <button class="btn ghost" data-climb="half" ${can && !climb.tookHalf ? "" : "disabled"}>👐 Take half ${climb.step > 0 && !climb.tookHalf ? fmt(climbValue() / 2) : ""}</button>`;
+        table = `
+          <button class="decision" data-climb="cash" ${can ? "" : "disabled"}>💰 Cash out<small>${climb.step > 0 ? fmt(climbValue()) : "—"}</small></button>
+          <div class="betCircle live">${chipMark(climb.stake)}<b>${fmt(climb.stake)}</b><span>riding</span></div>
+          <button class="decision" data-climb="half" ${can && !climb.tookHalf ? "" : "disabled"}>👐 Take half<small>${climb.step > 0 && !climb.tookHalf ? fmt(climbValue() / 2) : climb.tookHalf ? "used" : "—"}</small></button>
+          <button class="decision main" data-climb="draw" ${climb.busy ? "disabled" : ""}>🎈 Draw a ball</button>`;
       } else {
-        actions = `
-          <button class="btn" data-climb="start" ${climb.bet >= CLIMB_MIN ? "" : "disabled"}>🚀 Start (bet ${fmt(climb.bet)})</button>
-          <button class="btn ghost" data-climb="clear" ${climb.bet ? "" : "disabled"}>Clear bet</button>
-          <button class="btn ghost" data-climb="rebet" ${climb.lastBet ? "" : "disabled"}>↺ Same bet (${fmt(climb.lastBet)})</button>`;
+        table = `
+          <button class="decision" data-climb="clear" ${climb.bet ? "" : "disabled"}>✖ Clear<small>bet</small></button>
+          <div class="betCircle">${climb.bet ? chipMark(climb.bet) + `<b>${fmt(climb.bet)}</b>` : `<span>Place your bet<br>with the chips below</span>`}</div>
+          <button class="decision" data-climb="rebet" ${climb.lastBet ? "" : "disabled"}>↺ Same bet<small>${climb.lastBet ? fmt(climb.lastBet) : "—"}</small></button>
+          <button class="decision main" data-climb="start" ${climb.bet >= CLIMB_MIN ? "" : "disabled"}>🚀 Start</button>`;
       }
 
       $("casinoGame").innerHTML = `
@@ -3849,12 +3902,17 @@
           <div class="climbWrap">
             <div class="climbSky ${climb.crashed && !climb.active ? "crash" : ""}">
               <div class="machine ${mixing ? "mixing" : ""}">${shown.map(x => `<div class="ball ${x.b}"></div>`).join("")}</div>
-              <div class="drawnRow">${climb.drawn.map(x => `<div class="ball ${x.b} ${x.fresh ? "new" : ""} ${x.absorbed ? "absorbed" : ""}"></div>`).join("")}</div>
+              <div class="balloonRow">${climb.drawn.map((x, i) => {
+                const popped = x.b === "r" && !x.absorbed;   // the red one that ended the round
+                return `<div class="balloon ${x.b} ${x.fresh ? "new" : ""} ${x.absorbed ? "absorbed" : ""} ${popped ? "popped" : ""}"
+                          title="${x.b === "g" ? "Green: +1 step" : x.b === "d" ? "Gold: +1 step and a shield" : x.absorbed ? "Red, blocked by your shield" : "Red: popped!"}"></div>`;
+              }).join("")}</div>
               <div class="climbInfo">
                 ${center}
                 ${climb.shield ? `<div style="margin-top:6px"><span class="shield">🛡️ Shield active</span></div>` : ""}
                 <div class="odds"><span style="color:#b9f6ca">Next ball climbs: ${up}%</span><span style="color:#ffcdd2">Red: ${red}%${climb.shield ? " (blocked)" : ""}</span></div>
               </div>
+              <div class="climbTable">${table}</div>
             </div>
             <div class="ladder">${ladder}</div>
           </div>
@@ -3862,7 +3920,6 @@
             ${CLIMB_CHIPS.map(v => `<button class="chip ${v === climb.chip ? "selected" : ""}" data-climbchip="${v}"
                  style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
             <span class="muted">Click chips to add to your bet (max ${fmt(CLIMB_MAX)}).</span></div>`}
-          <div class="bjActions">${actions}</div>
           <div id="casinoMsg" class="${/Cashed|TOP|Banked|shield|Gold/.test(climb.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${climb.message}</div>
           <div class="muted" style="margin-top:6px; text-align:center">Green climbs a step · Gold climbs and gives a shield that blocks one red · Red pops your balloon · Take half once to bank half and keep climbing with the rest</div>
         </div>`;

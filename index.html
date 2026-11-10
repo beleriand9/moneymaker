@@ -873,7 +873,7 @@
         <button class="btn ghost small" data-info="gold">ℹ️ Info</button></div>
       <div class="muted infoBox" id="info-gold" hidden>The safest, slowest investment. Gold moves together with the stock market, every 10 seconds:
         24% chance of +0.4%, 41% chance of +0.2%, 35% chance of −0.15%. That is about <b>+50–60% per hour</b>, and it almost never loses over a few minutes.
-        Min. 1,000. <b>No cash-out fee</b>, no lock: cash out any amount at any time.</div>
+        Min. 1,000. <b>No cash-out fee</b>. After you sell gold, you have to wait <b>5 minutes</b> before selling again.</div>
       <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
         <div><div class="muted">Your gold</div><div class="bigValue" id="goldValue">0</div></div>
         <div><div class="muted">Invested</div><div class="bigValue" id="goldInvested">0</div></div>
@@ -892,6 +892,7 @@
         <input id="goldSellAmount" type="number" min="1" placeholder="Cash-out amount">
         <button class="btn ghost" id="goldSell">Cash out</button>
         <button class="btn ghost" id="goldSellAll">Cash out all (no fee)</button>
+        <span class="muted" id="goldCooldown"></span>
       </div>
     </div>
 
@@ -2760,10 +2761,15 @@
       updateCounter(); updateInvestLive(); save();
     });
 
+    const GOLD_SELL_COOLDOWN = 300;   // after selling gold, wait 5 minutes before selling again
+    if (typeof inv.goldCooldown !== "number") inv.goldCooldown = 0;
+
     function cashOutGold(amount) {
       if (isPaused()) return;
+      if (inv.goldCooldown > 0) return investMessage("⏳ You can sell gold again in " + clock(inv.goldCooldown) + ".");
       amount = Math.min(amount, inv.gold);
       if (amount <= 0) return investMessage("No gold to cash out.");
+      inv.goldCooldown = GOLD_SELL_COOLDOWN;
       inv.goldInvested *= 1 - amount / inv.gold;
       inv.gold -= amount;
       if (inv.gold < 0.5) { inv.gold = 0; inv.goldInvested = 0; }
@@ -2965,6 +2971,8 @@
         drawChart("goldChart", inv.goldPrices);
       }
 
+      if (inv.goldCooldown > 0) inv.goldCooldown--;
+
       // Broker ETF market move (runs once you own a Brokerage Firm)
       if (hasBroker()) {
         inv.petfTimer--;
@@ -3040,6 +3048,10 @@
 
       // Gold
       $("goldTotal").textContent = fmt(inv.gold);
+      const cool = inv.goldCooldown > 0;
+      $("goldSell").disabled = cool;
+      $("goldSellAll").disabled = cool;
+      $("goldCooldown").textContent = cool ? "⏳ Next gold sale in " + clock(inv.goldCooldown) : "";
       $("goldValue").textContent = fmt(inv.gold);
       showPL("gold", inv.gold, inv.goldInvested);
       const gl = inv.goldHistory[0];

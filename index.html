@@ -722,6 +722,7 @@
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="investMoney">0</div></div>
       <div class="stat"><div class="label">🏠 Real estate</div><div class="value chips" id="reTotal">0</div></div>
       <div class="stat"><div class="label">📊 ETF</div><div class="value chips" id="etfTotal">0</div></div>
+      <div class="stat"><div class="label">🪙 Gold</div><div class="value chips" id="goldTotal">0</div></div>
     </div>
     <div id="investMsg" class="flash"></div>
 
@@ -770,6 +771,34 @@
         <button class="btn ghost" id="etfSell">Cash out</button>
         <button class="btn ghost" id="etfSellAll">Cash out all</button>
         <span class="muted" id="etfSellPreview"></span>
+      </div>
+    </div>
+
+    <!-- Gold -->
+    <div class="card">
+      <div class="row"><h3>🪙 Gold</h3>
+        <button class="btn ghost small" data-info="gold">ℹ️ Info</button></div>
+      <div class="muted infoBox" id="info-gold" hidden>The safest, slowest investment. Gold moves together with the stock market, every 10 seconds:
+        24% chance of +0.4%, 41% chance of +0.2%, 35% chance of −0.15%. That is about <b>+50–60% per hour</b>, and it almost never loses over a few minutes.
+        Min. 1,000. <b>No cash-out fee</b>, no lock: cash out any amount at any time.</div>
+      <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
+        <div><div class="muted">Your gold</div><div class="bigValue" id="goldValue">0</div></div>
+        <div><div class="muted">Invested</div><div class="bigValue" id="goldInvested">0</div></div>
+        <div><div class="muted">Profit / loss</div><div class="bigValue" id="goldPL">–</div></div>
+        <div><div class="muted">Last move</div><div class="bigValue" id="goldLast">–</div></div>
+      </div>
+      <div class="chartBox" id="goldChart"></div>
+      <div class="moneyRow">
+        <input id="goldAmount" type="number" min="1000" placeholder="Amount (min 1,000)">
+        <button class="btn ghost small" data-invpct="gold" data-pct="0.25">25%</button>
+        <button class="btn ghost small" data-invpct="gold" data-pct="0.5">50%</button>
+        <button class="btn ghost small" data-invpct="gold" data-pct="1">All</button>
+        <button class="btn" id="goldBuy">Buy gold</button>
+      </div>
+      <div class="moneyRow">
+        <input id="goldSellAmount" type="number" min="1" placeholder="Cash-out amount">
+        <button class="btn ghost" id="goldSell">Cash out</button>
+        <button class="btn ghost" id="goldSellAll">Cash out all (no fee)</button>
       </div>
     </div>
 
@@ -2363,7 +2392,7 @@
     // 25% / 50% / All buttons fill in an amount of your money
     document.querySelectorAll("[data-invpct]").forEach(btn => {
       btn.addEventListener("click", () => {
-        const box = { re: "reAmount", etf: "etfAmount", petf: "petfAmount" }[btn.dataset.invpct];
+        const box = { re: "reAmount", etf: "etfAmount", petf: "petfAmount", gold: "goldAmount" }[btn.dataset.invpct];
         let amount = Math.floor(state.money * Number(btn.dataset.pct));
         if (btn.dataset.invpct === "petf") amount = Math.min(amount, PETF_MAX);
         $(box).value = amount;
@@ -2458,6 +2487,45 @@
 
     /* ----- Broker ETF (needs a Brokerage Firm): no fee, one slot ----- */
     if (typeof inv.petf !== "number") { inv.petf = 0; inv.petfTimer = ETF_EVERY; inv.petfHistory = []; }
+    // Gold: the safest, slowest investment (moves with the ETF every 10 seconds, no fee)
+    if (typeof inv.gold !== "number") { inv.gold = 0; inv.goldInvested = 0; inv.goldHistory = []; inv.goldPrices = [100]; }
+
+    function goldRoll() {
+      const r = Math.random();
+      if (r < 0.24) return 0.004;     // +0.4%
+      if (r < 0.65) return 0.002;     // +0.2%
+      return -0.0015;                 // −0.15%
+    }
+
+    $("goldBuy").addEventListener("click", () => {
+      if (isPaused()) return;
+      const amount = readAmount("goldAmount");
+      if (amount < ETF_MIN) return investMessage("Gold needs at least " + fmt(ETF_MIN) + ".");
+      if (amount > state.money) return investMessage("You don't have that much money.");
+      state.money -= amount;
+      inv.gold += amount;
+      inv.goldInvested += amount;
+      $("goldAmount").value = "";
+      addInvestXp(amount);
+      investMessage("🪙 Bought " + fmt(amount) + " of gold.", true);
+      updateCounter(); updateInvestLive(); save();
+    });
+
+    function cashOutGold(amount) {
+      if (isPaused()) return;
+      amount = Math.min(amount, inv.gold);
+      if (amount <= 0) return investMessage("No gold to cash out.");
+      inv.goldInvested *= 1 - amount / inv.gold;
+      inv.gold -= amount;
+      if (inv.gold < 0.5) { inv.gold = 0; inv.goldInvested = 0; }
+      state.money += amount;
+      $("goldSellAmount").value = "";
+      investMessage("🪙 Sold " + fmt(amount) + " of gold (no fee).", true);
+      updateCounter(); updateInvestLive(); save();
+    }
+    $("goldSell").addEventListener("click", () => cashOutGold(readAmount("goldSellAmount")));
+    $("goldSellAll").addEventListener("click", () => cashOutGold(inv.gold));
+
     // How much you put in (to show profit / loss). Old saves: count the current value as invested.
     if (typeof inv.etfInvested !== "number") inv.etfInvested = inv.etf;
     if (typeof inv.petfInvested !== "number") inv.petfInvested = inv.petf;
@@ -2589,6 +2657,8 @@
     }
     chartHover("etfChart", () => inv.etfPrices);
     chartHover("petfChart", () => inv.petfPrices);
+    chartHover("goldChart", () => inv.goldPrices);
+    drawChart("goldChart", inv.goldPrices);
     drawChart("etfChart", inv.etfPrices);
     drawChart("petfChart", inv.petfPrices);
 
@@ -2634,6 +2704,13 @@
         inv.etfPrices = inv.etfPrices.concat(inv.etfPrices[inv.etfPrices.length - 1] * (1 + move)).slice(-CHART_POINTS - 1);
         inv.etfTimer = ETF_EVERY;
         drawChart("etfChart", inv.etfPrices);
+
+        // Gold moves at the same time
+        const g = goldRoll();
+        inv.gold *= 1 + g;
+        inv.goldHistory = [g, ...inv.goldHistory].slice(0, 15);
+        inv.goldPrices = inv.goldPrices.concat(inv.goldPrices[inv.goldPrices.length - 1] * (1 + g)).slice(-CHART_POINTS - 1);
+        drawChart("goldChart", inv.goldPrices);
       }
 
       // Broker ETF market move (runs once you own a Brokerage Firm)
@@ -2677,6 +2754,14 @@
       $("petfBody").hidden = !broker;
       $("petfValue").textContent = fmt(inv.petf);
       showPL("petf", inv.petf, inv.petfInvested);
+
+      // Gold
+      $("goldTotal").textContent = fmt(inv.gold);
+      $("goldValue").textContent = fmt(inv.gold);
+      showPL("gold", inv.gold, inv.goldInvested);
+      const gl = inv.goldHistory[0];
+      $("goldLast").textContent = gl === undefined ? "–" : (gl > 0 ? "+" : "−") + (Math.abs(gl) * 100).toFixed(2) + "%";
+      $("goldLast").className = "bigValue " + (gl > 0 ? "up" : gl < 0 ? "down" : "");
       $("petfTimer").textContent = inv.petfTimer + "s";
       $("petfBuyRow").hidden = inv.petf > 0;
       $("petfSellRow").hidden = inv.petf <= 0;

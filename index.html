@@ -4275,6 +4275,8 @@
               ${spot("Trips", s.trips, { click: seat + "-trips", hint: "optional" })}
             </div></div>`;
         }
+        if (!h) return `<div class="uthSeat folded"><div class="muted">Seat ${seat + 1} · not playing</div>
+            <div class="cardsRow">${slotCard}${slotCard}</div></div>`;   // seat left empty this round
         const i = t.hands.indexOf(h);
         const done = betting;
         const resCls = !done ? "" : h.back > h.bet ? "win" : h.back === h.bet ? "push" : "lose";

@@ -156,6 +156,8 @@
     #investAllTime .total { font-weight: 800; }
     #casinoLevel.levelUp { animation: levelGlow 1.2s ease; }
     @keyframes levelGlow { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 30px #ffd34d; } }
+    .gameGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .gameGrid .gameCard { margin-bottom: 0; height: 100%; }
     .gameCard { cursor: pointer; text-align: left; width: 100%; font: inherit; color: #fff; }
     .gameCard:hover { border-color: #ffd34d; }
 
@@ -2045,6 +2047,12 @@
       { id: "plinko", name: "Plinko", emoji: "🔻", desc: "Drop up to 20 balls down a peg pyramid into multipliers from 0.3× to 250×. Bets 5,000 – 250,000 per ball." },
       { id: "climb",  name: "Sky Climb", emoji: "🎈", desc: "Draw balls to climb a 20-step ladder up to 50,000×. Cash out before a red ball pops your balloon! Bets 10,000 – 250,000." },
     ];
+    // Game groups in the casino lobby (games show in this order inside each group)
+    const CASINO_GROUPS = [
+      { name: "🎡 Roulette games", games: ["rouletteLow", "rouletteHigh", "rouletteSuper"] },
+      { name: "🃏 Card games",     games: ["bjLow", "bjHigh", "bjSuper"] },
+      { name: "🔻 Ball games",     games: ["plinko", "plinkoSuper", "climb"] },
+    ];
     let currentGame = null;   // null = game list
 
     /* =====================================================================
@@ -2118,9 +2126,13 @@
     function renderCasino() {
       const box = $("casinoGame");
       if (!currentGame) {
-        box.innerHTML = `<h2>Choose a game</h2>` + CASINO_GAMES.map(g =>
-          `<button class="card gameCard" data-game="${g.id}">
-             <h3>${g.emoji} ${g.name}</h3><div class="muted">${g.desc}</div></button>`).join("") +
+        const gameCard = (g) => `<button class="card gameCard" data-game="${g.id}">
+             <h3>${g.emoji} ${g.name}</h3><div class="muted">${g.desc}</div></button>`;
+        box.innerHTML = `<h2>Choose a game</h2>` + CASINO_GROUPS.map(group => `
+          <div class="card gameGroup">
+            <h2 style="margin:0 0 10px">${group.name}</h2>
+            <div class="gameGrid">${group.games.map(id => gameCard(CASINO_GAMES.find(g => g.id === id))).join("")}</div>
+          </div>`).join("") +
           `<div class="muted">More games coming soon...</div>`;
         return;
       }

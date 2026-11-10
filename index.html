@@ -48,6 +48,8 @@
            background: linear-gradient(90deg, #0d3b66, #1565a6, #0d3b66); }
     .sea .wake { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,0.15); }
     .sea .ship { position: absolute; top: 50%; transform: translate(-50%, -50%) scaleX(-1); font-size: 22px; transition: left 1s linear; }
+    .sea.road { background: linear-gradient(180deg, #3a3a44 0 44%, #f5f5f5 44% 56%, #3a3a44 56% 100%); }
+    .sea.road .wake { background: rgba(255, 211, 77, 0.18); }
     .sea .port { position: absolute; top: 50%; transform: translateY(-50%); font-size: 14px; }
     #shopView { max-width: 900px; margin: 0 auto; padding: 20px; }
     .cosmetics { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
@@ -862,6 +864,7 @@
     <div class="card wallet">
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="logiMoney">0</div></div>
       <div class="stat"><div class="label">🚢 Tankers</div><div class="value chips" id="logiCount">0 / 10</div></div>
+      <div class="stat"><div class="label">🚛 Trucks</div><div class="value chips" id="truckCount">0 / 15</div></div>
       <div class="stat"><div class="label">📦 Delivered (all time)</div><div class="value chips" id="logiEarned">0</div></div>
     </div>
     <div class="card">
@@ -872,6 +875,14 @@
         Then it gets 4 new offers. Longer routes pay more per second, and the two ocean crossings pay the most.
         A tanker earns back its price in about 3 hours. Voyages only move while the game is open.</div>
       <div id="tankers" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">🚛 Semi-trucks</h2>
+        <button class="btn ghost small" data-info="truck">ℹ️ Info</button></div>
+      <div class="muted infoBox" id="info-truck" hidden>Buy a semi-truck (150,000) for one of your 15 slots. Each free truck gets
+        <b>4 contract offers</b> across Europe: pick one and it drives. When it arrives, the whole contract is paid to your money.
+        Longer routes pay more per second. A truck earns back its price in about 1.5 hours. Trips only move while the game is open.</div>
+      <div id="trucks" style="margin-top:12px"></div>
     </div>
   </section>
 
@@ -4639,101 +4650,132 @@
     });
 
     /* =====================================================================
-       LOGISTICS: crude oil tankers
-       10 slots. An Aframax costs 75 scoin. A free tanker gets 4 contract offers;
-       pick one, it sails for the transit time, and the whole contract is paid on arrival.
+       LOGISTICS: tankers and semi-trucks share one "fleet" system.
+       A free vehicle gets 4 contract offers (different routes, random time in the route's range).
+       Pick one, it travels, and the whole contract is paid on arrival.
        Contract profit = route rate (bcoin per second) x transit time x random 0.95-1.05.
-       Rates are tuned so a tanker earns back its price in about 3 hours.
+       Tankers: 75 scoin, 10 slots, pay back in about 3 hours.
+       Trucks: 150,000, 15 slots, pay back in about 1.5 hours.
        ===================================================================== */
-    const TANKER_PRICE = 75000000;
-    const TANKER_SLOTS = 10;
-    const ROUTES = [
-      { from: "Sullom Voe 🇬🇧", to: "Rotterdam 🇳🇱",        min: 15, max: 20, rate: 6500 },
-      { from: "Ceyhan 🇹🇷",     to: "Augusta / Trieste 🇮🇹", min: 15, max: 25, rate: 6700 },
-      { from: "Arzew 🇩🇿",      to: "Fos-sur-Mer 🇫🇷",      min: 10, max: 15, rate: 6000 },
-      { from: "Cayo Arcas 🇲🇽", to: "Houston 🇺🇸",          min: 10, max: 20, rate: 6200 },
-      { from: "Houston 🇺🇸",    to: "Rotterdam 🇳🇱",        min: 75, max: 85, rate: 9000, long: true },
-      { from: "Kikeh 🇲🇾",      to: "Singapore 🇸🇬",        min: 10, max: 20, rate: 6200 },
-      { from: "Kozmino 🇷🇺",    to: "Ulsan 🇰🇷",            min: 10, max: 15, rate: 6000 },
-      { from: "Primorsk 🇷🇺",   to: "Wilhelmshaven 🇩🇪",    min: 25, max: 35, rate: 7200 },
-      { from: "Mina Al Fahal 🇴🇲", to: "Melaka 🇲🇾",       min: 55, max: 65, rate: 8500, long: true },
-    ];
+    const FLEETS = {
+      tanker: {
+        label: "Tanker", icon: "🚢", box: "tankers", countEl: "logiCount", price: 75000000, slots: 10, road: false,
+        names: ["Aurora", "Coral", "Neptune", "Atlas", "Borealis", "Odyssey", "Titan", "Meridian", "Horizon", "Nautilus"],
+        emptyText: "Aframax crude oil tanker",
+        routes: [
+          { from: "Sullom Voe 🇬🇧", to: "Rotterdam 🇳🇱",        min: 15, max: 20, rate: 6500 },
+          { from: "Ceyhan 🇹🇷",     to: "Augusta / Trieste 🇮🇹", min: 15, max: 25, rate: 6700 },
+          { from: "Arzew 🇩🇿",      to: "Fos-sur-Mer 🇫🇷",      min: 10, max: 15, rate: 6000 },
+          { from: "Cayo Arcas 🇲🇽", to: "Houston 🇺🇸",          min: 10, max: 20, rate: 6200 },
+          { from: "Houston 🇺🇸",    to: "Rotterdam 🇳🇱",        min: 75, max: 85, rate: 9000, long: true },
+          { from: "Kikeh 🇲🇾",      to: "Singapore 🇸🇬",        min: 10, max: 20, rate: 6200 },
+          { from: "Kozmino 🇷🇺",    to: "Ulsan 🇰🇷",            min: 10, max: 15, rate: 6000 },
+          { from: "Primorsk 🇷🇺",   to: "Wilhelmshaven 🇩🇪",    min: 25, max: 35, rate: 7200 },
+          { from: "Mina Al Fahal 🇴🇲", to: "Melaka 🇲🇾",       min: 55, max: 65, rate: 8500, long: true },
+        ],
+      },
+      truck: {
+        label: "Truck", icon: "🚛", box: "trucks", countEl: "truckCount", price: 150000, slots: 15, road: true,
+        names: Array.from({ length: 15 }, (_, i) => "Truck " + (i + 1)),
+        emptyText: "Semi-truck",
+        // rate = 22 + 0.5 x average minutes, so longer routes pay a little more per second
+        routes: [
+          { from: "Madrid 🇪🇸",    to: "Paris 🇫🇷",     min: 12, max: 13, rate: 28.3 },
+          { from: "Barcelona 🇪🇸", to: "Paris 🇫🇷",     min: 10, max: 11, rate: 27.3 },
+          { from: "Madrid 🇪🇸",    to: "Milan 🇮🇹",     min: 15, max: 17, rate: 30 },
+          { from: "Barcelona 🇪🇸", to: "Berlin 🇩🇪",    min: 18, max: 20, rate: 31.5 },
+          { from: "Madrid 🇪🇸",    to: "Frankfurt 🇩🇪", min: 18, max: 20, rate: 31.5 },
+          { from: "Rotterdam 🇳🇱", to: "Milan 🇮🇹",     min: 12, max: 13, rate: 28.3 },
+          { from: "Berlin 🇩🇪",    to: "Warsaw 🇵🇱",    min: 6,  max: 7,  rate: 25.3 },
+          { from: "Hamburg 🇩🇪",   to: "Milan 🇮🇹",     min: 13, max: 15, rate: 29 },
+          { from: "Valencia 🇪🇸",  to: "Amsterdam 🇳🇱", min: 20, max: 22, rate: 32.5 },
+          { from: "Warsaw 🇵🇱",    to: "Rotterdam 🇳🇱", min: 12, max: 13, rate: 28.3 },
+        ],
+      },
+    };
     if (!state.logistics) state.logistics = { tankers: [], earned: 0 };
     const logi = state.logistics;
+    if (!logi.trucks) logi.trucks = [];
+    const fleetList = (key) => key === "tanker" ? logi.tankers : logi.trucks;
 
     // 4 different routes with random transit times and profits
-    function makeContracts() {
-      const idx = ROUTES.map((_, i) => i);
+    function makeContracts(key = "tanker") {
+      const routes = FLEETS[key].routes;
+      const idx = routes.map((_, i) => i);
       for (let i = idx.length - 1; i > 0; i--) { const j = secureRandomInt(i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
       return idx.slice(0, 4).map(r => {
-        const route = ROUTES[r];
-        const seconds = (route.min * 60) + secureRandomInt((route.max - route.min) * 60 + 1);   // random time in the interval
+        const route = routes[r];
+        const seconds = (route.min * 60) + secureRandomInt((route.max - route.min) * 60 + 1);   // random time in the range
         const profit = Math.round(route.rate * seconds * (0.95 + secureRandomInt(101) / 1000));    // ±5%
         return { route: r, seconds, profit };
       });
     }
+    const ROUTES = FLEETS.tanker.routes;   // (kept for older code and tests)
 
     const clockLong = (sec) => sec >= 3600
       ? Math.floor(sec / 3600) + "h " + String(Math.floor((sec % 3600) / 60)).padStart(2, "0") + "m"
       : Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
 
-    // Runs every second: moves ships, pays arrivals. Returns money paid this second.
+    // Runs every second: moves every vehicle, pays arrivals. Returns money paid this second.
     function logisticsTick() {
-      let paid = 0, arrived = false;
-      for (const t of logi.tankers) {
-        if (!t.contract) continue;
-        t.contract.left--;
-        if (t.contract.left <= 0) {
-          paid += t.contract.profit;
-          logi.earned += t.contract.profit;
-          const r = ROUTES[t.contract.route];
-          showNotice(`🚢 Tanker ${t.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(t.contract.profit)}!`);
-          t.contract = null;
-          t.offers = makeContracts();
-          arrived = true;
-        } else {
-          updateTankerLive(t);
+      let paid = 0;
+      for (const key in FLEETS) {
+        const F = FLEETS[key];
+        let arrived = false;
+        for (const v of fleetList(key)) {
+          if (!v.contract) continue;
+          v.contract.left--;
+          if (v.contract.left <= 0) {
+            paid += v.contract.profit;
+            logi.earned += v.contract.profit;
+            const r = F.routes[v.contract.route];
+            showNotice(`${F.icon} ${v.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(v.contract.profit)}!`);
+            v.contract = null;
+            v.offers = makeContracts(key);
+            arrived = true;
+          } else {
+            updateVehicleLive(v);
+          }
         }
+        if (arrived) renderFleet(key);
       }
       if (paid > 0) state.money += paid;
-      if (arrived) renderTankers();
       $("logiEarned").textContent = fmt(logi.earned);
       return paid;
     }
 
-    function updateTankerLive(t) {
-      const c = t.contract;
+    function updateVehicleLive(v) {
+      const c = v.contract;
       const done = 1 - c.left / c.seconds;
-      const ship = $("ship-" + t.id), wake = $("wake-" + t.id), left = $("left-" + t.id);
+      const ship = $("ship-" + v.id), wake = $("wake-" + v.id), left = $("left-" + v.id);
       if (ship) ship.style.left = (6 + done * 88) + "%";
       if (wake) wake.style.width = (6 + done * 88) + "%";
       if (left) left.textContent = clockLong(c.left) + " left";
     }
 
-    const TANKER_NAMES = ["Aurora", "Coral", "Neptune", "Atlas", "Borealis", "Odyssey", "Titan", "Meridian", "Horizon", "Nautilus"];
-
-    function renderTankers() {
-      $("logiCount").textContent = logi.tankers.length + " / " + TANKER_SLOTS;
+    function renderFleet(key) {
+      const F = FLEETS[key], list = fleetList(key);
+      $(F.countEl).textContent = list.length + " / " + F.slots;
       $("logiEarned").textContent = fmt(logi.earned);
       let html = `<div class="tankerGrid">`;
-      logi.tankers.forEach(t => {
-        if (t.contract) {
-          const r = ROUTES[t.contract.route], c = t.contract;
+      list.forEach(v => {
+        if (v.contract) {
+          const r = F.routes[v.contract.route], c = v.contract;
           const done = 1 - c.left / c.seconds;
           html += `<div class="tanker sailing">
-            <div class="row"><b>🚢 ${t.name}</b><span class="income">+${fmt(c.profit)} on arrival</span></div>
+            <div class="row"><b>${F.icon} ${v.name}</b><span class="income">+${fmt(c.profit)} on arrival</span></div>
             <div class="muted">${r.from} → ${r.to}</div>
-            <div class="sea"><div class="wake" id="wake-${t.id}" style="width:${6 + done * 88}%"></div>
-              <span class="port" style="left:6px">⚓</span><span class="port" style="right:6px">🏁</span>
-              <span class="ship" id="ship-${t.id}" style="left:${6 + done * 88}%">🚢</span></div>
-            <div class="row muted"><span>Transit ${clockLong(c.seconds)}</span><span id="left-${t.id}">${clockLong(c.left)} left</span></div>
+            <div class="sea ${F.road ? "road" : ""}"><div class="wake" id="wake-${v.id}" style="width:${6 + done * 88}%"></div>
+              <span class="port" style="left:6px">${F.road ? "🏭" : "⚓"}</span><span class="port" style="right:6px">🏁</span>
+              <span class="ship" id="ship-${v.id}" style="left:${6 + done * 88}%">${F.icon}</span></div>
+            <div class="row muted"><span>Transit ${clockLong(c.seconds)}</span><span id="left-${v.id}">${clockLong(c.left)} left</span></div>
           </div>`;
         } else {
           html += `<div class="tanker">
-            <div class="row"><b>🚢 ${t.name}</b><span class="muted">in port · choose a contract</span></div>
-            <div class="offers">${t.offers.map((o, k) => {
-              const r = ROUTES[o.route];
-              return `<button class="offer" data-tanker="${t.id}" data-offer="${k}">
+            <div class="row"><b>${F.icon} ${v.name}</b><span class="muted">${F.road ? "at the depot" : "in port"} · choose a contract</span></div>
+            <div class="offers">${v.offers.map((o, k) => {
+              const r = F.routes[o.route];
+              return `<button class="offer" data-fleet="${key}" data-vehicle="${v.id}" data-offer="${k}">
                 <b class="route">${r.from} → ${r.to}</b>
                 💰 Total profit: <b>${fmt(o.profit)}</b><br>
                 ⏱️ Transit time: <b>${clockLong(o.seconds)}</b><br>
@@ -4743,37 +4785,43 @@
           </div>`;
         }
       });
-      if (logi.tankers.length < TANKER_SLOTS) {
+      if (list.length < F.slots) {
         html += `<div class="tanker emptySlot">
-          <div style="font-size:28px">🛢️</div>
-          <b>Empty slot</b><div class="muted" style="margin:4px 0 10px">Aframax crude oil tanker</div>
-          <button class="btn" data-buy-tanker="1" data-cost="${TANKER_PRICE}" ${state.money < TANKER_PRICE ? "disabled" : ""}>Buy for ${coins(TANKER_PRICE)}</button>
+          <div style="font-size:28px">${F.icon}</div>
+          <b>Empty slot</b><div class="muted" style="margin:4px 0 10px">${F.emptyText}</div>
+          <button class="btn" data-buy-fleet="${key}" data-cost="${F.price}" ${state.money < F.price ? "disabled" : ""}>Buy for ${coins(F.price)}</button>
         </div>`;
       }
-      $("tankers").innerHTML = html + `</div>`;
+      $(F.box).innerHTML = html + `</div>`;
     }
+    function renderTankers() { renderFleet("tanker"); renderFleet("truck"); }
 
-    $("tankers").addEventListener("click", (e) => {
+    function fleetClick(e) {
       if (isPaused()) return;
-      if (e.target.closest("[data-buy-tanker]")) {
-        if (logi.tankers.length >= TANKER_SLOTS || state.money < TANKER_PRICE) return;
-        state.money -= TANKER_PRICE;
-        const t = { id: state.nextId++, name: TANKER_NAMES[logi.tankers.length % TANKER_NAMES.length], contract: null, offers: makeContracts() };
-        logi.tankers.push(t);
-        showNotice(`🚢 Bought the tanker ${t.name}! Choose its first contract.`);
-        updateCounter(); renderTankers(); save();
+      const buy = e.target.closest("[data-buy-fleet]");
+      if (buy) {
+        const key = buy.dataset.buyFleet, F = FLEETS[key], list = fleetList(key);
+        if (list.length >= F.slots || state.money < F.price) return;
+        state.money -= F.price;
+        const v = { id: state.nextId++, name: F.names[list.length % F.names.length], contract: null, offers: makeContracts(key) };
+        list.push(v);
+        showNotice(`${F.icon} Bought ${v.name}! Choose its first contract.`);
+        updateCounter(); renderFleet(key); save();
         return;
       }
       const offer = e.target.closest("[data-offer]");
       if (offer) {
-        const t = logi.tankers.find(x => x.id === Number(offer.dataset.tanker));
-        if (!t || t.contract) return;
-        const o = t.offers[Number(offer.dataset.offer)];
-        t.contract = { ...o, left: o.seconds };
-        t.offers = null;
-        renderTankers(); save();
+        const key = offer.dataset.fleet;
+        const v = fleetList(key).find(x => x.id === Number(offer.dataset.vehicle));
+        if (!v || v.contract) return;
+        const o = v.offers[Number(offer.dataset.offer)];
+        v.contract = { ...o, left: o.seconds };
+        v.offers = null;
+        renderFleet(key); save();
       }
-    });
+    }
+    $("tankers").addEventListener("click", fleetClick);
+    $("trucks").addEventListener("click", fleetClick);
 
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;

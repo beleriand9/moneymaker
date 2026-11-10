@@ -962,6 +962,7 @@
       <div class="stat"><div class="label">🚢 Tankers</div><div class="value chips" id="logiCount">0 / 10</div></div>
       <div class="stat"><div class="label">✈️ Planes</div><div class="value chips" id="planeCount">0 / 5</div></div>
       <div class="stat"><div class="label">📦 Delivered (all time)</div><div class="value chips" id="logiEarned">0</div></div>
+      <div class="stat"><div class="label">📋 Contracts fulfilled</div><div class="value chips" id="logiContracts">0</div></div>
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">🚛 Semi-trucks</h2>
@@ -5760,6 +5761,7 @@
       }
       if (paid > 0) state.money += paid;
       $("logiEarned").textContent = fmt(logi.earned);
+      $("logiContracts").textContent = (logi.contracts || 0).toLocaleString();
       // repair buttons light up as soon as you can afford them
       document.querySelectorAll("[data-repair]").forEach(b => {
         const v = logi.trucks.find(x => x.id === Number(b.dataset.repair));
@@ -5781,6 +5783,7 @@
       const F = FLEETS[key], list = fleetList(key);
       $(F.countEl).textContent = list.length + " / " + F.slots;
       $("logiEarned").textContent = fmt(logi.earned);
+      $("logiContracts").textContent = (logi.contracts || 0).toLocaleString();
       let html = `<div class="tankerGrid">`;
       list.forEach(v => {
         if (v.contract) {

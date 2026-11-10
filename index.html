@@ -41,6 +41,9 @@
     .offers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
     .offer { text-align: left; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
              padding: 9px; color: #fff; cursor: pointer; font: inherit; font-size: 13px; line-height: 1.45; }
+    .agentToggle { margin-left: auto; margin-right: 8px; }
+    .btn.ghost.agentToggle.on { background: #2e9e5b; border-color: #5fd68e; color: #fff; }
+    .agentNote { margin-top: 6px; font-size: 13px; color: #8fd3ff; }
     .offer:hover { border-color: #ffd34d; background: rgba(255, 211, 77, 0.08); }
     .offer b.route { display: block; font-size: 13px; margin-bottom: 2px; }
     .offer .long { color: #ffd34d; font-weight: 800; font-size: 11px; }
@@ -870,10 +873,13 @@
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">🚛 Semi-trucks</h2>
+        <button class="btn ghost small agentToggle" id="truckAgent" title="The agent picks a random contract 5 seconds after the offers appear. Fee: 2% of the contract, paid from your money.">🤖 Logistics agent: OFF</button>
         <button class="btn ghost small" data-info="truck">ℹ️ Info</button></div>
       <div class="muted infoBox" id="info-truck" hidden>Buy a semi-truck (150,000) for one of your 15 slots. Each free truck gets
         <b>4 contract offers</b> across Europe: pick one and it drives. When it arrives, the whole contract is paid to your money.
-        Longer routes pay more per second. A truck earns back its price in about 1.5 hours. Trips only move while the game is open.</div>
+        Longer routes pay more per second. A truck earns back its price in about 1.5 hours. Trips only move while the game is open.
+        <br><br>🤖 <b>Logistics agent:</b> turn it on and it picks a random contract for any waiting truck 5 seconds after the offers appear.
+        It charges 2% of that contract's profit, taken from your money the moment it picks. It waits if you can't afford the fee.</div>
       <div id="trucks" style="margin-top:12px"></div>
     </div>
     <div class="card">
@@ -4760,6 +4766,48 @@
     if (!logi.trucks) logi.trucks = [];
     const fleetList = (key) => key === "tanker" ? logi.tankers : logi.trucks;
 
+    // Logistics agent (trucks): picks a random contract after 5 s for a 2% fee
+    const AGENT_DELAY = 5, AGENT_FEE = 0.02;
+    if (logi.truckAgent === undefined) logi.truckAgent = false;
+    function agentTick(key) {
+      if (key !== "truck" || !logi.truckAgent) return false;
+      let picked = false;
+      for (const v of fleetList(key)) {
+        if (v.contract || !v.offers) continue;
+        v.wait = (v.wait || 0) + 1;
+        if (v.wait < AGENT_DELAY) {
+          const el = $("agent-" + v.id);
+          if (el) el.textContent = `🤖 Agent picks a contract in ${AGENT_DELAY - v.wait}s`;
+          continue;
+        }
+        const k = secureRandomInt(v.offers.length);
+        const o = v.offers[k];
+        const fee = Math.round(contractPayout(key, o.profit) * AGENT_FEE);
+        if (state.money < fee) {
+          const el = $("agent-" + v.id);
+          if (el) el.textContent = `🤖 Agent waits: needs ${fmt(fee)} for the fee`;
+          continue;
+        }
+        state.money -= fee;
+        v.contract = { ...o, left: o.seconds };
+        v.offers = null; v.wait = 0;
+        const r = FLEETS[key].routes[o.route];
+        showNotice(`🤖 Agent sent ${v.name} to ${r.to.replace(/ \S+$/, "")} (fee ${fmt(fee)})`);
+        picked = true;
+      }
+      return picked;
+    }
+    function updateAgentButton() {
+      const b = $("truckAgent");
+      b.textContent = "🤖 Logistics agent: " + (logi.truckAgent ? "ON" : "OFF");
+      b.classList.toggle("on", logi.truckAgent);
+    }
+    $("truckAgent").addEventListener("click", () => {
+      logi.truckAgent = !logi.truckAgent;
+      logi.trucks.forEach(v => { v.wait = 0; });   // everyone waiting gets a fresh 5 seconds
+      updateAgentButton(); renderFleet("truck"); save();
+    });
+
     // 4 different routes with random transit times and profits
     function makeContracts(key = "tanker") {
       const routes = FLEETS[key].routes;
@@ -4795,11 +4843,13 @@
             showNotice(`${F.icon} ${v.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(pay)}!`);
             v.contract = null;
             v.offers = makeContracts(key);
+            v.wait = 0;
             arrived = true;
           } else {
             updateVehicleLive(v);
           }
         }
+        if (agentTick(key)) { arrived = true; updateCounter(); }
         if (arrived) renderFleet(key);
       }
       if (paid > 0) state.money += paid;
@@ -4845,6 +4895,7 @@
                 <span class="muted">≈ ${fmt(o.profit / o.seconds)} / sec</span>${r.long ? ` <span class="long">LONG HAUL</span>` : ""}
               </button>`;
             }).join("")}</div>
+            ${key === "truck" && logi.truckAgent ? `<div class="agentNote" id="agent-${v.id}">🤖 Agent picks a contract in ${Math.max(0, AGENT_DELAY - (v.wait || 0))}s</div>` : ""}
           </div>`;
         }
       });
@@ -4866,7 +4917,7 @@
         const key = buy.dataset.buyFleet, F = FLEETS[key], list = fleetList(key);
         if (list.length >= F.slots || state.money < F.price) return;
         state.money -= F.price;
-        const v = { id: state.nextId++, name: F.names[list.length % F.names.length], contract: null, offers: makeContracts(key) };
+        const v = { id: state.nextId++, name: F.names[list.length % F.names.length], contract: null, offers: makeContracts(key), wait: 0 };
         list.push(v);
         showNotice(`${F.icon} Bought ${v.name}! Choose its first contract.`);
         updateCounter(); renderFleet(key); render(); save();
@@ -4879,7 +4930,7 @@
         if (!v || v.contract) return;
         const o = v.offers[Number(offer.dataset.offer)];
         v.contract = { ...o, left: o.seconds };
-        v.offers = null;
+        v.offers = null; v.wait = 0;
         renderFleet(key); save();
       }
     }
@@ -4899,7 +4950,7 @@
     renderProperties();
     updateInvestLive();
     renderCosmetics(); applyCosmetics();
-    renderTankers();
+    renderTankers(); updateAgentButton();
     showView(["casino", "invest", "shop", "logistics"].includes(state.view) ? state.view : "income");
     if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
     else if (state.pendingTaxId !== null) {

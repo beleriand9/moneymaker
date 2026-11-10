@@ -2121,6 +2121,7 @@
           state.money -= d.amount;
           taxRefund(d.amount);
           state.taxDebts = state.taxDebts.filter(x => x !== d);
+          state.stats.taxPaid = (state.stats.taxPaid || 0) + 1;
         }
         state.pendingTaxId = null;        // resume the game
         hideModal();
@@ -2175,6 +2176,7 @@
         d.amount -= pay;
         if (pay > 0) taxRefund(pay);
       }
+      state.stats.taxPaid = (state.stats.taxPaid || 0) + state.taxDebts.filter(d => d.amount <= 0).length;   // bills paid off
       state.taxDebts = state.taxDebts.filter(d => d.amount > 0);
       updateDebt();
       updateCounter();
@@ -2939,6 +2941,7 @@
       state.money += p.value;
       investRecord("re", 0, p.value);
       inv.properties = inv.properties.filter(x => x !== p);
+      state.stats.reSold = (state.stats.reSold || 0) + 1;
       let bonusText = "";
       if (state.special && state.special.agency) {
         const bonus = p.value * AGENCY_SALE_BONUS;
@@ -3222,6 +3225,7 @@
         let lost = 0;
         inv.properties.forEach(p => { lost += p.value * RE_CRASH_LOSS; p.value *= 1 - RE_CRASH_LOSS; });
         investMessage("🏚️ REAL ESTATE CRASH! Your properties lost " + fmt(lost) + " (70%).");
+        state.stats.reCrash = true;
         showNotice("🏚️ Real estate crash! Properties lost 70% of their value.");
         changed = true;
       }
@@ -5885,11 +5889,28 @@
        ===================================================================== */
     const SC = 1e6;   // 1 scoin
     const ACH_CATEGORIES = [
+      { id: "general", name: "⭐ General" },
       { id: "income", name: "💰 Income" }, { id: "casino", name: "🎰 Casino" },
       { id: "invest", name: "📈 Investments" }, { id: "logistics", name: "🚢 Logistics" },
     ];
     const flag = (k) => () => (state.stats[k] ? 1 : 0);
+    // all-time profit of an investment: money taken out + what it is worth now - money put in
+    const investProfit = (key) => { const st = inv.stats && inv.stats[key]; return st ? st.out + investCurrent(key) - st.in : 0; };
+    // wearing the coin and background of the same collection
+    const matchingSet = () => COLLECTIONS_IDS().some(col =>
+      ["coin", "background"].every(slot => COSMETICS.some(c => c.collection === col && c.slot === slot && state.cosmetics.on[c.id])));
+    const COLLECTIONS_IDS = () => [...new Set(COSMETICS.map(c => c.collection))];
     const ACHIEVEMENTS = [
+      // General
+      { id: "cash1s",     cat: "general", icon: "💵", name: "Millionaire",        desc: "Have 1 scoin in your money (not casino chips)",   goal: SC,       get: () => state.money, money: true },
+      { id: "cash10s",    cat: "general", icon: "💰", name: "Multi-millionaire",  desc: "Have 10 scoin in your money (not casino chips)",  goal: 10 * SC,  get: () => state.money, money: true },
+      { id: "cash100s",   cat: "general", icon: "🏦", name: "Swimming in coins",  desc: "Have 100 scoin in your money (not casino chips)", goal: 100 * SC, get: () => state.money, money: true },
+      { id: "cash1g",     cat: "general", icon: "👑", name: "Billionaire",        desc: "Have 1 gcoin in your money (not casino chips)",   goal: 1e12,     get: () => state.money, money: true },
+      { id: "tax10",      cat: "general", icon: "🧾", name: "Good citizen",       desc: "Pay 10 tax bills",                    goal: 10,   get: () => state.stats.taxPaid || 0 },
+      { id: "tax100",     cat: "general", icon: "🧾", name: "Model taxpayer",     desc: "Pay 100 tax bills",                   goal: 100,  get: () => state.stats.taxPaid || 0 },
+      { id: "tax1000",    cat: "general", icon: "🏛️", name: "Pillar of society",  desc: "Pay 1,000 tax bills",                 goal: 1000, get: () => state.stats.taxPaid || 0 },
+      { id: "cosmetic1",  cat: "general", icon: "🛍️", name: "Treat yourself",     desc: "Buy your first cosmetic item in the Shop", goal: 1, get: () => Object.values(state.cosmetics.owned).some(Boolean) ? 1 : 0 },
+      { id: "fullSet",    cat: "general", icon: "🎨", name: "Dressed to impress", desc: "Wear the coin and background from the same collection", goal: 1, get: () => matchingSet() ? 1 : 0 },
       // Income
       { id: "click100",   cat: "income", icon: "👆", name: "Warming up",         desc: "Click the coin 100 times",            goal: 100,    get: () => state.stats.clicks },
       { id: "click1k",    cat: "income", icon: "👆", name: "Clicker",            desc: "Click the coin 1,000 times",          goal: 1000,   get: () => state.stats.clicks },
@@ -5932,6 +5953,13 @@
       { id: "prop10",     cat: "invest", icon: "🏘️", name: "Property portfolio", desc: "Own 10 properties at once",           goal: 10, get: () => inv.properties.length },
       { id: "re1s",       cat: "invest", icon: "🏙️", name: "Real estate mogul",  desc: "1 scoin all-time real estate profit", goal: SC,      get: () => reProfit(), money: true },
       { id: "re10s",      cat: "invest", icon: "🌆", name: "Skyline owner",      desc: "10 scoin all-time real estate profit", goal: 10 * SC, get: () => reProfit(), money: true },
+      { id: "reSold100",  cat: "invest", icon: "🔑", name: "Flipper",            desc: "Sell 100 properties",                 goal: 100, get: () => state.stats.reSold || 0 },
+      { id: "reCrash",    cat: "invest", icon: "🏚️", name: "Survivor",           desc: "Live through a real estate crash",    goal: 1, get: flag("reCrash") },
+      { id: "etf1s",      cat: "invest", icon: "📉", name: "Index fan",          desc: "1 scoin all-time ETF profit",         goal: SC,       get: () => investProfit("etf"), money: true },
+      { id: "etf10s",     cat: "invest", icon: "📈", name: "Market timer",       desc: "10 scoin all-time ETF profit",        goal: 10 * SC,  get: () => investProfit("etf"), money: true },
+      { id: "gold10s",    cat: "invest", icon: "🪙", name: "Fort Knox",          desc: "10 scoin all-time gold profit",       goal: 10 * SC,  get: () => goldProfit(), money: true },
+      { id: "petf10s",    cat: "invest", icon: "🏦", name: "Friends in high places", desc: "10 scoin all-time Broker ETF profit", goal: 10 * SC,  get: () => investProfit("petf"), money: true },
+      { id: "petf100s",   cat: "invest", icon: "🏛️", name: "Wall Street insider", desc: "100 scoin all-time Broker ETF profit", goal: 100 * SC, get: () => investProfit("petf"), money: true },
       { id: "gold1s",     cat: "invest", icon: "🥇", name: "Golden touch",       desc: "1 scoin all-time gold profit",        goal: SC, get: () => goldProfit(), money: true },
       { id: "petfFull",   cat: "invest", icon: "🏦", name: "Insider",            desc: "Fill the Broker ETF (10 scoin invested)", goal: 10 * SC, get: () => investCurrent("petf"), money: true },
       { id: "ilevel10",   cat: "invest", icon: "📊", name: "Analyst",            desc: "Reach Investor level 10",             goal: 10, get: () => levelInfo(inv.xp).level },

@@ -287,7 +287,9 @@
     .vpJackpot .amt { font-size: 30px; font-weight: 900; color: #fff6c9; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
     .vpJackpot .sub { font-size: 13px; color: #ffefb0; }
     .vpJackpot.won { animation: pulse 0.6s ease-in-out 6; }
-    .vpPay { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    .vpPay { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 14px; }
+    .vpPayHead { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+    .vpTable { margin-top: 10px; }
     .vpPay td { padding: 3px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); }
     .vpPay td:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
     .vpPay tr.hit td { background: rgba(255, 211, 77, 0.25); color: #ffd34d; font-weight: 800; }
@@ -3827,7 +3829,7 @@
     for (const id in VP_TABLES) {
       const saved = state.vp[id] || {};
       if (saved.inPlay > 0) state.casinoChips += saved.inPlay;
-      state.vp[id] = { bet: saved.bet || VP_TABLES[id].min, inPlay: 0 };
+      state.vp[id] = { bet: saved.bet || 0, lastBet: saved.lastBet || 0, inPlay: 0 };
     }
     const vpBet = (t) => state.vp[t.id].bet;
     const vpJackpotShare = (t, bet) => t.jackpot * bet / t.max;   // what a 100% jackpot pays for this bet
@@ -3846,6 +3848,7 @@
       if (state.casinoChips < bet) return vpMsg("Not enough chips. Add money to the casino first.");
       state.casinoChips -= bet;
       state.vp[t.id].inPlay = bet;
+      state.vp[t.id].lastBet = bet;
       t.deck = vpDeck();
       t.cards = [];
       t.held = [false, false, false, false, false];
@@ -3921,15 +3924,21 @@
                     ${inner}<div class="holdTag">${t.held[i] && c ? "HELD" : ""}</div></div>`;
       }
 
-      let actions;
+      // Betting circle in the middle, decisions on both sides, main action below (like Sky Climb)
+      let table;
       if (betting) {
-        actions = `
-          <button class="btn" data-vp="deal" ${t.busy ? "disabled" : ""}>🎴 Deal (bet ${fmt(bet)})</button>
-          <button class="btn ghost" data-vp="max">Max bet (${fmt(t.max)})</button>
-          <button class="btn ghost" data-vp="min">Min bet</button>`;
+        table = `
+          <button class="decision" data-vp="clear" ${bet && !t.busy ? "" : "disabled"}>✖ Clear<small>bet</small></button>
+          <div class="betCircle">${bet ? chipMark(bet) + `<b>${fmt(bet)}</b>` : `<span>Place your bet<br>with the chips below</span>`}</div>
+          <button class="decision" data-vp="max" ${bet < t.max ? "" : "disabled"}>⬆ Max bet<small>${fmt(t.max)}</small></button>
+          <button class="decision main" data-vp="deal" ${bet >= t.min && !t.busy ? "" : "disabled"}>🎴 Deal</button>`;
       } else {
-        actions = `<button class="btn" data-vp="draw" ${t.phase === "holding" && !t.busy ? "" : "disabled"}>🔄 Draw</button>
-          <span class="muted" style="align-self:center">Click the cards you want to keep, then draw.</span>`;
+        const can = t.phase === "holding" && !t.busy;
+        table = `
+          <button class="decision" data-vp="holdNone" ${can && t.held.some(x => x) ? "" : "disabled"}>✖ Release<small>all cards</small></button>
+          <div class="betCircle live">${chipMark(shownBet)}<b>${fmt(shownBet)}</b><span>in play</span></div>
+          <button class="decision" data-vp="holdAll" ${can && !t.held.every(x => x) ? "" : "disabled"}>✋ Hold<small>all cards</small></button>
+          <button class="decision main" data-vp="draw" ${can ? "" : "disabled"}>🔄 Draw</button>`;
       }
 
       $("casinoGame").innerHTML = `
@@ -3942,24 +3951,27 @@
             <div class="sub">💰 JACKPOT</div>
             <div class="amt">${coins(t.jackpot)}</div>
             <div class="sub">Royal Flush wins 100% · any Straight Flush wins 20% · paid on top of the normal win.
-              Your bet of ${fmt(shownBet)} wins ${pct(shownBet / t.max)} of it${shownBet < t.max ? " (bet the max to win all of it)" : ""}.</div>
+              ${shownBet ? `Your bet of ${fmt(shownBet)} wins ${pct(shownBet / t.max)} of it${shownBet < t.max ? " (bet the max to win all of it)" : ""}.` : "Your share = your bet ÷ max bet."}</div>
           </div>
 
-          <table class="vpPay"><tbody>${rows}</tbody></table>
+          <div class="vpPayHead"><b>📋 Payouts</b>
+            <button class="btn ghost small" data-vp="togglePay">${state.vpPayHidden ? "▸ Show" : "▾ Minimize"}</button></div>
+          ${state.vpPayHidden
+            ? `<div class="muted">Royal Flush ${VP_HANDS[11].pays}× + jackpot · … · Jacks or Better ${VP_HANDS[1].pays}×</div>`
+            : `<table class="vpPay"><tbody>${rows}</tbody></table>`}
 
           <div class="bjFelt">
             <div class="vpCards">${slots}</div>
             <div class="vpHandName">${t.result !== null ? (t.result ? "🎉 " + VP_HANDS[t.result].name : "No win") : nowCat ? "You have: " + VP_HANDS[nowCat].name : ""}</div>
+            <div class="climbTable vpTable">${table}</div>
           </div>
 
-          <div class="chipsRow">
+          ${!betting ? `<div class="muted" style="text-align:center; margin-top:12px">Click the cards you want to keep, then draw.</div>` : `<div class="chipsRow">
             <span class="muted">Bet:</span>
-            ${t.chips.map(v => `<button class="chip" data-vpchip="${v}" ${betting ? "" : "disabled"}
+            ${t.chips.map(v => `<button class="chip" data-vpchip="${v}"
                  style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
-            <button class="btn ghost small" data-vp="clear" ${betting ? "" : "disabled"}>Clear</button>
-            <span class="muted">Click chips to add to your bet (max ${fmt(t.max)}).</span>
-          </div>
-          <div class="bjActions">${actions}</div>
+            <span class="muted">Click chips to add to your bet (${fmt(t.min)} – ${fmt(t.max)}).</span>
+          </div>`}
           <div id="casinoMsg" class="${/won|back|JACKPOT/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
           <div class="muted" style="margin-top:6px; text-align:center">The joker is wild and becomes the best card for your hand · "1×" means you get your bet back · Returns about 98% with perfect play</div>
         </div>`;
@@ -3979,10 +3991,8 @@
       const chip = e.target.closest("[data-vpchip]");
       if (chip && t.phase === "betting" && !t.busy) {
         const v = Number(chip.dataset.vpchip), cur = state.vp[t.id];
-        const start = cur.bet === t.min && t.lastWasDefault !== false ? 0 : cur.bet;   // first chip replaces the default min bet
-        cur.bet = Math.min(t.max, start + v);
-        t.lastWasDefault = false;
-        t.message = cur.bet === t.max && start + v > t.max ? "Table max is " + fmt(t.max) + "." : "";
+        if (cur.bet + v > t.max) return vpMsg("Maximum bet is " + fmt(t.max) + ".");
+        cur.bet += v; t.message = "";
         renderVideoPoker(); save();
         return;
       }
@@ -3992,7 +4002,9 @@
       if (a === "deal" && !t.busy) vpDeal();
       if (a === "draw" && t.phase === "holding" && !t.busy) vpDraw();
       if (a === "max") { state.vp[t.id].bet = t.max; t.message = ""; renderVideoPoker(); save(); }
-      if (a === "min" || a === "clear") { state.vp[t.id].bet = t.min; t.lastWasDefault = true; t.message = ""; renderVideoPoker(); save(); }
+      if (a === "clear") { state.vp[t.id].bet = 0; t.message = ""; renderVideoPoker(); save(); }
+      if ((a === "holdAll" || a === "holdNone") && t.phase === "holding" && !t.busy) { t.held = t.held.map(() => a === "holdAll"); renderVideoPoker(); }
+      if (a === "togglePay") { state.vpPayHidden = !state.vpPayHidden; renderVideoPoker(); save(); }
     });
 
     /* =====================================================================

@@ -1636,8 +1636,8 @@
       }
       if (action === "lawSlot") {
         const law = state.special.law;
-        if (!law || law.offer || law.attorneys.length >= LAW_MAX || state.money < LAW_SLOT_PRICE) return;
-        state.money -= LAW_SLOT_PRICE;
+        if (!law || law.offer || law.attorneys.length >= LAW_MAX || state.money < lawSlotPrice()) return;
+        state.money -= lawSlotPrice();
         law.offer = makeLawOffer();
       }
       if (action === "lawPick") {
@@ -3956,6 +3956,8 @@
     /* ----- ⚖️ Law firm: no unlock, 500k, only one. Up to 10 attorney slots (50k each).
        Buying a slot offers 3 random attorneys: pick one (no refresh). Only one Employment lawyer. ----- */
     const LAW_PRICE = 500000, LAW_SLOT_PRICE = 50000, LAW_MAX = 10;
+    // Each new attorney slot costs 50k more: 50k, 100k, 150k ... 500k for the 10th
+    const lawSlotPrice = () => LAW_SLOT_PRICE * (((state.special.law && state.special.law.attorneys.length) || 0) + 1);
     const ATTORNEYS = {
       criminal:    { name: "Criminal defence lawyer",     emoji: "🚔", desc: "+5% cashback on lost casino bets" },
       immigration: { name: "Immigration lawyer",          emoji: "🛂", desc: "Gold mines and car washes earn +10%" },
@@ -4037,7 +4039,7 @@
       if (!law) {
         return `<div class="card specialCard"><div class="row">
           <div><h3>⚖️ Law Firm</h3>
-            <div class="muted">No workers, HR or accountant: hire up to ${LAW_MAX} attorneys instead (${fmt(LAW_SLOT_PRICE)} per slot)</div>
+            <div class="muted">No workers, HR or accountant: hire up to ${LAW_MAX} attorneys instead (slots cost 50k, then 100k, 150k…)</div>
             <div class="muted">8 kinds of lawyers: casino cashback, tax refunds, extra worker slots, steady income and more</div>
             <div class="muted">Owned: 0 / 1</div></div>
           <button class="btn" data-action="buySpecial" data-special="law" data-cost="${LAW_PRICE}">Buy ${fmt(LAW_PRICE)}</button>
@@ -4061,7 +4063,7 @@
           law.offer.map((t, k) => `<button class="choice" data-action="lawPick" data-pick="${k}">
             <b>${ATTORNEYS[t].emoji} ${ATTORNEYS[t].name}</b><small>${ATTORNEYS[t].desc}</small></button>`).join("") + `</div>`;
       } else if (law.attorneys.length < LAW_MAX) {
-        html += `<div style="margin-top:10px"><button class="btn" data-action="lawSlot" data-cost="${LAW_SLOT_PRICE}">Buy attorney slot (${fmt(LAW_SLOT_PRICE)})</button>
+        html += `<div style="margin-top:10px"><button class="btn" data-action="lawSlot" data-cost="${lawSlotPrice()}">Buy attorney slot (${fmt(lawSlotPrice())})</button>
                  <span class="muted"> you'll choose 1 of 3 lawyers</span></div>`;
       } else {
         html += `<div class="muted" style="margin-top:8px">All attorney slots are filled.</div>`;

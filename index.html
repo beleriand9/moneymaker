@@ -128,6 +128,8 @@
       transition: width 0.6s ease;
     }
     .allTime { margin-top: 6px; font-size: 14px; }
+    #investAllTime { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+    #investAllTime .total { font-weight: 800; }
     #casinoLevel.levelUp { animation: levelGlow 1.2s ease; }
     @keyframes levelGlow { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 30px #ffd34d; } }
     .gameCard { cursor: pointer; text-align: left; width: 100%; font: inherit; color: #fff; }
@@ -715,6 +717,7 @@
           <span class="muted" id="investFeeText"></span></div>
         <div class="xpBar"><div class="xpFill" id="investXpFill"></div></div>
         <div class="muted" id="investXpText"></div>
+        <div class="allTime" id="investAllTime"></div>
       </div>
     </div>
 
@@ -2425,6 +2428,7 @@
       if (amount > state.money) return investMessage("You don't have that much money.");
       state.money -= amount;
       inv.properties.push({ id: state.nextId++, value: amount, lock: RE_LOCK, rentIn: RE_RENT_EVERY });
+      investRecord("re", amount, 0);
       $("reAmount").value = "";
       addInvestXp(amount);
       investMessage("🏠 Bought a property for " + fmt(amount) + ".", true);
@@ -2437,6 +2441,7 @@
       const p = inv.properties.find(x => x.id === Number(btn.dataset.sell));
       if (!p || p.lock > 0) return;
       state.money += p.value;
+      investRecord("re", 0, p.value);
       inv.properties = inv.properties.filter(x => x !== p);
       investMessage("Sold a property for " + fmt(p.value) + ".", true);
       renderProperties(); updateCounter(); updateInvestLive(); save();
@@ -2462,6 +2467,7 @@
       state.money -= amount;
       inv.etf += amount;
       inv.etfInvested += amount;
+      investRecord("etf", amount, 0);
       $("etfAmount").value = "";
       addInvestXp(amount);
       investMessage("📊 Invested " + fmt(amount) + " in the ETF.", true);
@@ -2477,6 +2483,7 @@
       inv.etf -= amount;
       if (inv.etf < 0.5) { inv.etf = 0; inv.etfInvested = 0; }
       state.money += amount - fee;
+      investRecord("etf", 0, amount - fee);
       $("etfSellAmount").value = "";
       investMessage(`Cashed out ${fmt(amount)} (fee ${fmt(fee)}): +${fmt(amount - fee)} to your money.`, true);
       updateCounter(); updateInvestLive(); save();
@@ -2505,6 +2512,7 @@
       state.money -= amount;
       inv.gold += amount;
       inv.goldInvested += amount;
+      investRecord("gold", amount, 0);
       $("goldAmount").value = "";
       addInvestXp(amount);
       investMessage("🪙 Bought " + fmt(amount) + " of gold.", true);
@@ -2519,6 +2527,7 @@
       inv.gold -= amount;
       if (inv.gold < 0.5) { inv.gold = 0; inv.goldInvested = 0; }
       state.money += amount;
+      investRecord("gold", 0, amount);
       $("goldSellAmount").value = "";
       investMessage("🪙 Sold " + fmt(amount) + " of gold (no fee).", true);
       updateCounter(); updateInvestLive(); save();
@@ -2546,6 +2555,7 @@
       state.money -= amount;
       inv.petf = amount;
       inv.petfInvested = amount;
+      investRecord("petf", amount, 0);
       inv.petfTimer = ETF_EVERY;
       $("petfAmount").value = "";
       addInvestXp(amount);
@@ -2557,6 +2567,7 @@
       if (isPaused() || inv.petf <= 0) return;
       const amount = inv.petf;
       state.money += amount;
+      investRecord("petf", 0, amount);
       inv.petf = 0;
       inv.petfInvested = 0;
       investMessage("🏦 Cashed out " + fmt(amount) + " from the Broker ETF (no fee).", true);
@@ -2693,7 +2704,7 @@
           p.rentIn = RE_RENT_EVERY;
         }
       });
-      if (rent > 0) { state.money += rent; investMessage("🏠 Rent paid: +" + fmt(rent), true); }
+      if (rent > 0) { state.money += rent; investRecord("re", 0, rent); investMessage("🏠 Rent paid: +" + fmt(rent), true); }
 
       // ETF market move (the market always moves; your money follows it if invested)
       inv.etfTimer--;
@@ -2743,7 +2754,38 @@
     }
 
     // Update all the numbers on the investing page (no rebuilding, so buttons and inputs keep working)
+    /* ----- All-time profits per investment -----
+       profit = everything you got back (sales, cash-outs after fees, rent) + what it is worth now - everything you put in */
+    function investCurrent(key) {
+      if (key === "re") return inv.properties.reduce((a, p) => a + p.value, 0);
+      return inv[key] || 0;
+    }
+    if (!inv.stats) {
+      // start tracking now: what you already hold counts as money put in
+      inv.stats = {};
+      for (const k of ["re", "etf", "gold", "petf"]) inv.stats[k] = { in: investCurrent(k), out: 0 };
+    }
+    function investRecord(key, moneyIn, moneyOut) {
+      inv.stats[key].in += moneyIn;
+      inv.stats[key].out += moneyOut;
+    }
+    function updateInvestAllTime() {
+      const parts = [["re", "🏠 Real estate"], ["etf", "📊 ETF"], ["gold", "🪙 Gold"], ["petf", "🏦 Broker ETF"]];
+      let total = 0, html = "";
+      for (const [k, label] of parts) {
+        const st = inv.stats[k];
+        if (k === "petf" && st.in === 0 && !hasBroker()) continue;   // hide until you have a Brokerage Firm
+        const profit = st.out + investCurrent(k) - st.in;
+        total += profit;
+        const cls = profit > 0.5 ? "up" : profit < -0.5 ? "down" : "";
+        html += `<span>${label}: <b class="${cls}">${profit > 0.5 ? "+" : profit < -0.5 ? "−" : ""}${fmt(Math.abs(profit))}</b></span>`;
+      }
+      const tcls = total > 0.5 ? "up" : total < -0.5 ? "down" : "";
+      $("investAllTime").innerHTML = `<span class="total">📊 All-time profits: <b class="${tcls}">${total > 0.5 ? "+" : total < -0.5 ? "−" : ""}${fmt(Math.abs(total))}</b></span>` + html;
+    }
+
     function updateInvestLive() {
+      updateInvestAllTime();
       const reTotal = inv.properties.reduce((a, p) => a + p.value, 0);
       $("reTotal").textContent = fmt(reTotal);
       $("etfTotal").textContent = fmt(inv.etf + inv.petf);

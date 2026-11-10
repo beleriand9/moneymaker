@@ -584,6 +584,10 @@
     .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin-top: 8px; }
     .agent { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
     .agent b { color: #9fe39f; }
+    .lawSlots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 8px; }
+    .lawSlot { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 7px 9px; font-size: 13px; }
+    .lawSlot .live { color: #9fe39f; font-weight: 700; }
+    .lawSlot.empty { border: 1px dashed rgba(255,255,255,0.2); color: #8d8da3; text-align: center; }
     .mineBar { height: 12px; background: #1c1d2b; border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
     .mineFill { height: 100%; background: linear-gradient(90deg, #b07a00, #ffd34d); border-radius: 999px; }
     .agent.zero b { color: #9a9ab0; }
@@ -1137,7 +1141,7 @@
     const typeOf = (company) => BUSINESS_TYPES.find(t => t.id === company.typeId);
 
     // Accountant and HR count as 2 of the max employees
-    const maxWorkers = (company) => typeOf(company).maxEmployees - 2;
+    const maxWorkers = (company) => typeOf(company).maxEmployees - 2 + (lawCount("employment") > 0 ? 1 : 0);
 
     const ownedOf = (typeId) => state.companies.filter(c => c.typeId === typeId).length;
     const carWashWorkers = () => state.companies
@@ -1361,6 +1365,10 @@
       });
 
       let total = earn.reduce((a, b) => a + b, 0);
+
+      // Law firm: immigration lawyers boost car washes, business lawyers boost their current target
+      if (company.typeId === "carwash") total *= 1 + 0.10 * lawCount("immigration");
+      total *= 1 + 0.02 * businessLawyerTargets(company);
 
       // Car salons boost the car businesses
       if (company.typeId === "carwash" || company.typeId === "repair") {
@@ -1596,6 +1604,26 @@
         state.companies.push({ typeId: t.id, accountant: null, hr: null, workers: [], candidates: null });
       }
       if (action === "toggle") company.collapsed = !company.collapsed;
+      if (action === "buySpecial" && btn.dataset.special === "law") {
+        if (state.special.law || state.money < LAW_PRICE) return;
+        state.money -= LAW_PRICE;
+        state.special.law = { attorneys: [], offer: null };
+        showNotice("⚖️ Law firm opened! Buy attorney slots to hire lawyers.");
+      }
+      if (action === "lawSlot") {
+        const law = state.special.law;
+        if (!law || law.offer || law.attorneys.length >= LAW_MAX || state.money < LAW_SLOT_PRICE) return;
+        state.money -= LAW_SLOT_PRICE;
+        law.offer = makeLawOffer();
+      }
+      if (action === "lawPick") {
+        const law = state.special.law;
+        if (!law || !law.offer) return;
+        const type = law.offer[Number(btn.dataset.pick)];
+        law.attorneys.push({ type, id: state.nextId++, target: -1, value: 0 });
+        law.offer = null;
+        showNotice(`⚖️ Hired a ${ATTORNEYS[type].name}!`);
+      }
       if (action === "buySpecial" && btn.dataset.special === "mine") {
         if (state.special.mines.length >= MINE_MAX || state.money < MINE_PRICE || goldProfit() < MINE_UNLOCK) return;
         state.money -= MINE_PRICE;
@@ -1765,6 +1793,7 @@
         const d = state.taxDebts.find(x => x.id === state.pendingTaxId);
         if (d) {
           state.money -= d.amount;
+          taxRefund(d.amount);
           state.taxDebts = state.taxDebts.filter(x => x !== d);
         }
         state.pendingTaxId = null;        // resume the game
@@ -1818,6 +1847,7 @@
         const pay = Math.min(Math.floor(state.money), d.amount);
         state.money -= pay;
         d.amount -= pay;
+        if (pay > 0) taxRefund(pay);
       }
       state.taxDebts = state.taxDebts.filter(d => d.amount > 0);
       updateDebt();
@@ -1871,7 +1901,7 @@
 
       // Special businesses
       const agencyIncome = agencyTick();
-      perSecond += agencyIncome + mineTick();
+      perSecond += agencyIncome + mineTick() + lawTick();
 
       state.money = Math.max(0, state.money + perSecond);
 
@@ -1985,7 +2015,7 @@
       if (level >= MAX_LEVEL) return { level, into: 0, need: 0, max: true };
       return { level, into: xp - LEVEL_XP[level], need: LEVEL_XP[level + 1] - LEVEL_XP[level], max: false };
     }
-    const cashbackRate = () => levelInfo(state.casinoXp).level * CASHBACK_PER_LEVEL;
+    const cashbackRate = () => levelInfo(state.casinoXp).level * CASHBACK_PER_LEVEL + 0.05 * lawCount("criminal");
     const pct = (r) => (r * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) + "%";
 
     // All-time casino results: total bet and total paid back (wins, pushes, cashback)
@@ -2538,6 +2568,13 @@
         state.money += bonus;
         investRecord("re", 0, bonus);          // counts toward real estate profit (and new agents)
         bonusText = ` 🏢 Agency bonus +${fmt(bonus)}.`;
+      }
+      const reLawyers = lawCount("realestate");
+      if (reLawyers > 0) {
+        const bonus = p.value * 0.02 * reLawyers;
+        state.money += bonus;
+        investRecord("re", 0, bonus);
+        bonusText += ` ⚖️ Real estate lawyer${reLawyers > 1 ? "s" : ""} +${fmt(bonus)}.`;
       }
       investMessage("Sold a property for " + fmt(p.value) + "." + bonusText, true);
       renderProperties(); updateCounter(); updateInvestLive(); save();
@@ -3798,7 +3835,8 @@
 
       let income = 0, emptied = false;
       for (const m of state.special.mines) {
-        let pay = MINE_INCOME * (state.influenceLeft > 0 ? 2 : 1);   // political influence doubles it
+        let pay = MINE_INCOME * (state.influenceLeft > 0 ? 2 : 1)    // political influence doubles it
+                  * (1 + 0.10 * lawCount("immigration"));             // immigration lawyers: +10% each
         pay = Math.min(pay, m.capacity - m.mined);                    // the last bit of gold
         m.mined += pay;
         income += pay;
@@ -3848,6 +3886,122 @@
       return html;
     }
 
+    /* ----- ⚖️ Law firm: no unlock, 500k, only one. Up to 10 attorney slots (50k each).
+       Buying a slot offers 3 random attorneys: pick one (no refresh). Only one Employment lawyer. ----- */
+    const LAW_PRICE = 500000, LAW_SLOT_PRICE = 50000, LAW_MAX = 10;
+    const ATTORNEYS = {
+      criminal:    { name: "Criminal defence lawyer",     emoji: "🚔", desc: "+5% cashback on lost casino bets" },
+      immigration: { name: "Immigration lawyer",          emoji: "🛂", desc: "Gold mines and car washes earn +10%" },
+      divorce:     { name: "Divorce & family lawyer",     emoji: "💔", desc: "Earns 90–100 per second (changes every second)" },
+      employment:  { name: "Employment lawyer",           emoji: "👷", desc: "+1 worker slot in every business (only one allowed)" },
+      realestate:  { name: "Real estate lawyer",          emoji: "🏠", desc: "Selling real estate gives +2% more" },
+      business:    { name: "Business lawyer",             emoji: "💼", desc: "+2% income for one random business, changes every 10 seconds" },
+      debt:        { name: "Debt & financial lawyer",     emoji: "🧾", desc: "Get 25% back of every tax payment (max 100%)" },
+      civil:       { name: "Civil litigation lawyer",     emoji: "🏛️", desc: "Earns 70–100 per second (changes every second)" },
+    };
+
+    function lawCount(type) {
+      const law = state.special && state.special.law;
+      return law ? law.attorneys.filter(a => a.type === type).length : 0;
+    }
+
+    // 3 different attorney types; never a second Employment lawyer
+    function makeLawOffer() {
+      const pool = Object.keys(ATTORNEYS).filter(t => !(t === "employment" && lawCount("employment") > 0));
+      for (let i = pool.length - 1; i > 0; i--) { const j = secureRandomInt(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      return pool.slice(0, 3);
+    }
+
+    // How many business lawyers are boosting this company right now
+    function businessLawyerTargets(company) {
+      const law = state.special && state.special.law;
+      if (!law) return 0;
+      const idx = state.companies.indexOf(company);
+      return law.attorneys.filter(a => a.type === "business" && a.target === idx).length;
+    }
+
+    function taxRefund(paid) {
+      const share = Math.min(1, 0.25 * lawCount("debt"));
+      if (share <= 0) return;
+      const back = paid * share;
+      state.money += back;
+      showNotice(`🧾 Your debt lawyer${lawCount("debt") > 1 ? "s" : ""} got ${fmt(back)} of your tax back!`);
+    }
+
+    let lawTicks = 0;
+    function lawTick() {
+      const law = state.special.law;
+      if (!law) return 0;
+      lawTicks++;
+      let income = 0;
+      for (const a of law.attorneys) {
+        if (a.type === "divorce") a.value = 90 + secureRandomInt(11);   // 90–100
+        if (a.type === "civil")   a.value = 70 + secureRandomInt(31);   // 70–100
+        if (a.type === "divorce" || a.type === "civil") income += a.value;
+        if (a.type === "business" && (a.target < 0 || lawTicks % 10 === 0 || a.target >= state.companies.length)) {
+          a.target = state.companies.length ? secureRandomInt(state.companies.length) : -1;
+        }
+        const el = $("law-live-" + a.id);
+        if (el) el.textContent = lawLive(a);
+      }
+      if (state.influenceLeft > 0) income *= 2;     // political influence doubles business income
+      const el = $("law-income");
+      if (el) el.textContent = "+" + income.toFixed(1) + " / sec";
+      return income;
+    }
+
+    // Name of a company for display, e.g. "Car Wash #2"
+    function companyName(idx) {
+      const c = state.companies[idx];
+      if (!c) return "no business yet";
+      const t = typeOf(c);
+      const n = state.companies.slice(0, idx + 1).filter(x => x.typeId === c.typeId).length;
+      return `${t.emoji} ${t.name}${t.maxOwned > 1 ? " #" + n : ""}`;
+    }
+
+    function lawLive(a) {
+      if (a.type === "divorce" || a.type === "civil") return a.value + " / sec";
+      if (a.type === "business") return "Boosting " + companyName(a.target);
+      return "";
+    }
+
+    function renderLawFirm() {
+      const law = state.special.law;
+      if (!law) {
+        return `<div class="card specialCard"><div class="row">
+          <div><h3>⚖️ Law Firm</h3>
+            <div class="muted">No workers, HR or accountant: hire up to ${LAW_MAX} attorneys instead (${fmt(LAW_SLOT_PRICE)} per slot)</div>
+            <div class="muted">8 kinds of lawyers: casino cashback, tax refunds, extra worker slots, steady income and more</div>
+            <div class="muted">Owned: 0 / 1</div></div>
+          <button class="btn" data-action="buySpecial" data-special="law" data-cost="${LAW_PRICE}">Buy ${fmt(LAW_PRICE)}</button>
+        </div></div>`;
+      }
+      const income = law.attorneys.reduce((s, a) => s + ((a.type === "divorce" || a.type === "civil") ? a.value : 0), 0);
+      let html = `<div class="card specialCard">
+        <div class="row"><h3>⚖️ Law Firm</h3><span class="income" id="law-income">+${income.toFixed(1)} / sec</span></div>
+        <h4>Attorneys (${law.attorneys.length} / ${LAW_MAX})</h4>
+        <div class="lawSlots">`;
+      law.attorneys.forEach(a => {
+        const at = ATTORNEYS[a.type];
+        html += `<div class="lawSlot" title="${at.desc}"><b>${at.emoji} ${at.name}</b><br>
+                   <span class="muted">${at.desc}</span><br><span class="live" id="law-live-${a.id}">${lawLive(a)}</span></div>`;
+      });
+      for (let i = law.attorneys.length; i < LAW_MAX; i++) html += `<div class="lawSlot empty">Empty slot</div>`;
+      html += `</div>`;
+
+      if (law.offer) {
+        html += `<h4>Choose your new attorney</h4><div class="choices">` +
+          law.offer.map((t, k) => `<button class="choice" data-action="lawPick" data-pick="${k}">
+            <b>${ATTORNEYS[t].emoji} ${ATTORNEYS[t].name}</b><small>${ATTORNEYS[t].desc}</small></button>`).join("") + `</div>`;
+      } else if (law.attorneys.length < LAW_MAX) {
+        html += `<div style="margin-top:10px"><button class="btn" data-action="lawSlot" data-cost="${LAW_SLOT_PRICE}">Buy attorney slot (${fmt(LAW_SLOT_PRICE)})</button>
+                 <span class="muted"> you'll choose 1 of 3 lawyers</span></div>`;
+      } else {
+        html += `<div class="muted" style="margin-top:8px">All attorney slots are filled.</div>`;
+      }
+      return html + `</div>`;
+    }
+
     function renderSpecialBusinesses() {
       const ag = state.special.agency;
       const profit = reProfit();
@@ -3882,7 +4036,7 @@
           <span class="muted">${fmt(AGENCY_PRICE)}</span>
         </div></div>`;
       }
-      return html + renderMines();
+      return html + renderMines() + renderLawFirm();
     }
 
     /* =====================================================================

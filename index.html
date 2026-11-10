@@ -1180,9 +1180,10 @@
     //   1M scoin and up   -> "10,956.92 gcoin" (1 gcoin = 1,000,000 scoin)
     // Never rounds up, so it never shows more than you have.
     const SCOIN = 1e6, GCOIN = 1e12;
-    function splitCoins(n) {
+    // scoinFrom: from which amount to switch from bcoin to scoin (1M by default)
+    function splitCoins(n, scoinFrom = SCOIN) {
       const a = Math.abs(n);
-      if (a < SCOIN) return [Math.floor(a).toLocaleString(), "bcoin"];
+      if (a < scoinFrom) return [Math.floor(a).toLocaleString(), "bcoin"];
       const unit = a < GCOIN ? SCOIN : GCOIN;
       const v = Math.floor(a / unit * 100) / 100;
       return [v.toLocaleString(undefined, { maximumFractionDigits: 2 }), unit === SCOIN ? "scoin" : "gcoin"];
@@ -1632,10 +1633,16 @@
     }
 
     function updateCounter() {
-      const [num, unit] = splitCoins(state.money);
+      // Main counter: stays in bcoin until 100M, then switches to scoin (and gcoin at 1M scoin)
+      const [num, unit] = splitCoins(state.money, 100 * SCOIN);
       $("counter").firstChild.nodeValue = num + " ";
       $("counter").querySelector("span").textContent = unit;
-      $("counter").title = Math.floor(state.money).toLocaleString() + " bcoin";
+      // Hover shows the other coin: bcoin view -> how many scoin; scoin/gcoin view -> exact bcoin
+      const dec = state.money >= GCOIN ? 2 : 6;   // huge amounts: 2 decimals is plenty
+      const asScoin = (Math.floor(state.money / SCOIN * 10 ** dec) / 10 ** dec).toLocaleString(undefined, { maximumFractionDigits: dec });
+      $("counter").title = unit === "bcoin"
+        ? "= " + asScoin + " scoin"
+        : (unit === "gcoin" ? "= " + asScoin + " scoin\n" : "") + "= " + Math.floor(state.money).toLocaleString() + " bcoin";
       $("casinoMoney").textContent = fmt(state.money);
       $("casinoChips").textContent = fmt(state.casinoChips || 0);
       $("investMoney").textContent = fmt(state.money);

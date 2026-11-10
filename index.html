@@ -2579,6 +2579,11 @@
     });
 
     $("reList").addEventListener("click", (e) => {
+      if (e.target.closest("[data-re-toggle]")) {
+        inv.reCollapsed = !inv.reCollapsed;
+        renderProperties(); save();
+        return;
+      }
       const btn = e.target.closest("[data-sell]");
       if (!btn || isPaused()) return;
       const p = inv.properties.find(x => x.id === Number(btn.dataset.sell));
@@ -2604,9 +2609,25 @@
       renderProperties(); updateCounter(); updateInvestLive(); save();
     });
 
+    // Summary line for all properties (shown at the top, and alone when minimized)
+    function reSummary() {
+      const ps = inv.properties;
+      const total = ps.reduce((a, p) => a + p.value, 0);
+      const unlocked = ps.filter(p => p.lock <= 0).length;
+      const nextRent = Math.min(...ps.map(p => p.rentIn));
+      return `${ps.length} ${ps.length === 1 ? "property" : "properties"} · total value <b>${fmt(total)}</b> · ` +
+             `next rent ${clock(nextRent)} (+${fmt(total * RE_RENT_RATE)}) · ${unlocked} / ${ps.length} can be sold`;
+    }
+
     function renderProperties() {
       if (inv.properties.length === 0) { $("reList").innerHTML = `<div class="muted">You don't own any property yet.</div>`; return; }
-      $("reList").innerHTML = inv.properties.map((p, i) => `
+      const collapsed = !!inv.reCollapsed;
+      const head = `<div class="row" style="margin-bottom:6px">
+          <span class="muted" id="re-summary">${reSummary()}</span>
+          <button class="btn ghost small" data-re-toggle="1">${collapsed ? "▸ Show all" : "▾ Minimize all"}</button>
+        </div>`;
+      if (collapsed) { $("reList").innerHTML = head; return; }
+      $("reList").innerHTML = head + inv.properties.map((p, i) => `
         <div class="property">
           <span class="grow">🏠 Property ${i + 1} · value <b id="re-value-${p.id}">${fmt(p.value)}</b></span>
           <span class="muted">rent in <span id="re-rent-${p.id}">${clock(p.rentIn)}</span></span>
@@ -2985,6 +3006,8 @@
       const sell = Math.min(readAmount("etfSellAmount"), inv.etf);
       $("etfSellPreview").textContent = sell > 0 ? `You get ${fmt(sell * (1 - etfFee()))} after the ${pct(etfFee())} fee` : "";
 
+      const sum = $("re-summary");
+      if (sum && inv.properties.length) sum.innerHTML = reSummary();
       inv.properties.forEach(p => {
         const v = $("re-value-" + p.id), r = $("re-rent-" + p.id), b = $("re-sell-" + p.id);
         if (v) v.textContent = fmt(p.value);

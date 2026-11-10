@@ -31,7 +31,26 @@
     }
 
     #incomeView { display: flex; }
-    #incomeView[hidden], #casinoView[hidden], #investView[hidden] { display: none; }
+    #incomeView[hidden], #casinoView[hidden], #investView[hidden], #shopView[hidden] { display: none; }
+    #shopView { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .cosmetics { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+    .cosmetic { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; overflow: hidden; }
+    .cosmetic.on { border-color: #ffd34d; box-shadow: 0 0 16px rgba(255, 211, 77, 0.35); }
+    .cosmetic .preview { height: 170px; display: flex; align-items: center; justify-content: center; background: #15162a center / cover no-repeat; }
+    .cosmetic .preview img { height: 150px; width: 150px; }
+    .cosmetic .info { padding: 12px 14px; }
+    .cosmetic .info .row { margin-top: 10px; }
+    .switch { position: relative; width: 52px; height: 28px; border-radius: 999px; border: none; cursor: pointer; background: #555566; transition: background 0.2s; }
+    .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left 0.2s; }
+    .switch.on { background: #1fbf5a; }
+    .switch.on::after { left: 27px; }
+
+    /* Wow So Rich cosmetics */
+    body.wowBg {
+      background: linear-gradient(rgba(12, 12, 22, 0.78), rgba(12, 12, 22, 0.86)), url("assets/wow-background.jpg") center / cover fixed;
+    }
+    #coin.wowCoin { background: url("assets/wow-coin.webp") center / contain no-repeat; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55); }
+    #coin.wowCoin::after { content: none; }
 
     #shop {
       width: 420px;
@@ -598,6 +617,7 @@
     <button class="tab active" data-view="income">💰 Income</button>
     <button class="tab" data-view="casino">🎰 Casino</button>
     <button class="tab" data-view="invest">📈 Investing</button>
+    <button class="tab" data-view="shop">🛍️ Shop</button>
   </nav>
 
   <div id="incomeView">
@@ -724,6 +744,18 @@
       </div>
     </div>
     <div id="casinoGame"></div>
+  </section>
+
+  <!-- ===== Shop: cosmetics ===== -->
+  <section id="shopView" hidden>
+    <div class="card wallet">
+      <div class="stat"><div class="label">💰 Your money</div><div class="value" id="shopMoney">0</div></div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 4px">🐕 Wow So Rich Collection</h2>
+      <div class="muted">Cosmetic items: they change how the game looks. Turn them on or off any time after buying.</div>
+      <div class="cosmetics" id="cosmetics"></div>
+    </div>
   </section>
 
   <!-- ===== Investing ===== -->
@@ -1538,6 +1570,7 @@
       $("casinoMoney").textContent = fmt(state.money);
       $("casinoChips").textContent = fmt(state.casinoChips || 0);
       $("investMoney").textContent = fmt(state.money);
+      $("shopMoney").textContent = fmt(state.money);
       updateAffordability();
     }
 
@@ -1864,6 +1897,7 @@
       $("incomeView").hidden = view !== "income";
       $("casinoView").hidden = view !== "casino";
       $("investView").hidden = view !== "invest";
+      $("shopView").hidden = view !== "shop";
       document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
       save();
     }
@@ -4066,6 +4100,55 @@
       if (btn) btn.textContent = `🔻 Drop ${plinko.count > 1 ? plinko.count + " balls" : "ball"} (${fmt(plinko.bet * plinko.count)})`;
     });
 
+    /* =====================================================================
+       SHOP: cosmetic items (Wow So Rich Collection)
+       ===================================================================== */
+    const COSMETICS = [
+      { id: "wowBg",   name: "Wow So Rich Background", price: 5000000, desc: "A very rich dog in a very rich office, behind the whole game.",
+        preview: `<div class="preview" style="background-image:url('assets/wow-background-thumb.jpg')"></div>` },
+      { id: "wowCoin", name: "Wow So Rich Coin",       price: 5000000, desc: "Replaces the golden coin you click with the Wow So Rich coin.",
+        preview: `<div class="preview"><img src="assets/wow-coin.webp" alt="Wow So Rich coin"></div>` },
+    ];
+    if (!state.cosmetics) state.cosmetics = { owned: {}, on: {} };
+
+    function applyCosmetics() {
+      document.body.classList.toggle("wowBg", !!state.cosmetics.on.wowBg);
+      $("coin").classList.toggle("wowCoin", !!state.cosmetics.on.wowCoin);
+    }
+
+    function renderCosmetics() {
+      $("cosmetics").innerHTML = COSMETICS.map(c => {
+        const owned = !!state.cosmetics.owned[c.id], on = !!state.cosmetics.on[c.id];
+        const action = owned
+          ? `<span class="muted">${on ? "On" : "Off"}</span>
+             <button class="switch ${on ? "on" : ""}" data-cosmetic-toggle="${c.id}" aria-label="Turn ${c.name} ${on ? "off" : "on"}"></button>`
+          : `<span><b>${fmt(c.price)}</b> bcoin</span>
+             <button class="btn" data-cosmetic-buy="${c.id}" data-cost="${c.price}" ${state.money < c.price ? "disabled" : ""}>Buy</button>`;
+        return `<div class="cosmetic ${on ? "on" : ""}">${c.preview}
+          <div class="info"><b>${c.name}</b><div class="muted">${c.desc}</div>
+            <div class="row">${action}</div></div></div>`;
+      }).join("");
+    }
+
+    $("cosmetics").addEventListener("click", (e) => {
+      if (isPaused()) return;
+      const buy = e.target.closest("[data-cosmetic-buy]");
+      if (buy) {
+        const c = COSMETICS.find(x => x.id === buy.dataset.cosmeticBuy);
+        if (!c || state.cosmetics.owned[c.id] || state.money < c.price) return;
+        state.money -= c.price;
+        state.cosmetics.owned[c.id] = true;
+        state.cosmetics.on[c.id] = true;          // switch it on right away
+        showNotice("🛍️ Bought " + c.name + "!");
+      }
+      const tog = e.target.closest("[data-cosmetic-toggle]");
+      if (tog) {
+        const id = tog.dataset.cosmeticToggle;
+        if (state.cosmetics.owned[id]) state.cosmetics.on[id] = !state.cosmetics.on[id];
+      }
+      if (buy || tog) { applyCosmetics(); renderCosmetics(); updateCounter(); save(); }
+    });
+
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;
 
@@ -4078,7 +4161,8 @@
     updateInvestLevel();
     renderProperties();
     updateInvestLive();
-    showView(["casino", "invest"].includes(state.view) ? state.view : "income");
+    renderCosmetics(); applyCosmetics();
+    showView(["casino", "invest", "shop"].includes(state.view) ? state.view : "income");
     if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
     else if (state.pendingTaxId !== null) {
       const d = state.taxDebts.find(x => x.id === state.pendingTaxId);

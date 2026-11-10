@@ -46,6 +46,9 @@
     .switch.on::after { left: 27px; }
 
     /* Wow So Rich cosmetics */
+    body.royalBg {
+      background: linear-gradient(rgba(12, 12, 22, 0.8), rgba(12, 12, 22, 0.88)), url("assets/royal-background.jpg") center / cover fixed;
+    }
     body.wowBg {
       background: linear-gradient(rgba(12, 12, 22, 0.78), rgba(12, 12, 22, 0.86)), url("assets/wow-background.jpg") center / cover fixed;
     }
@@ -751,11 +754,8 @@
     <div class="card wallet">
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="shopMoney">0</div></div>
     </div>
-    <div class="card">
-      <h2 style="margin:0 0 4px">🐕 Wow So Rich Collection</h2>
-      <div class="muted">Cosmetic items: they change how the game looks. Turn them on or off any time after buying.</div>
-      <div class="cosmetics" id="cosmetics"></div>
-    </div>
+    <div class="muted" style="margin:0 0 12px">Cosmetic items change how the game looks. Turn them on or off any time after buying. Only one background can be on at a time.</div>
+    <div id="cosmetics"></div>
   </section>
 
   <!-- ===== Investing ===== -->
@@ -4103,21 +4103,36 @@
     /* =====================================================================
        SHOP: cosmetic items (Wow So Rich Collection)
        ===================================================================== */
+    // slot: items in the same slot replace each other (only one background at a time)
+    const COLLECTIONS = [
+      { id: "wow",   name: "🐕 Wow So Rich Collection" },
+      { id: "royal", name: "👑 Royal Collection" },
+    ];
     const COSMETICS = [
-      { id: "wowBg",   name: "Wow So Rich Background", price: 5000000, desc: "A very rich dog in a very rich office, behind the whole game.",
+      { id: "wowBg",   collection: "wow", slot: "background", name: "Wow So Rich Background", price: 5000000, desc: "A very rich dog in a very rich office, behind the whole game.",
         preview: `<div class="preview" style="background-image:url('assets/wow-background-thumb.jpg')"></div>` },
-      { id: "wowCoin", name: "Wow So Rich Coin",       price: 5000000, desc: "Replaces the golden coin you click with the Wow So Rich coin.",
+      { id: "wowCoin", collection: "wow", slot: "coin", name: "Wow So Rich Coin", price: 5000000, desc: "Replaces the golden coin you click with the Wow So Rich coin.",
         preview: `<div class="preview"><img src="assets/wow-coin.webp" alt="Wow So Rich coin"></div>` },
+      { id: "royalBg", collection: "royal", slot: "background", name: "Royal Background", price: 25000000, desc: "His Majesty the Cat, glowing over the whole game.",
+        preview: `<div class="preview" style="background-image:url('assets/royal-background-thumb.jpg')"></div>` },
     ];
     if (!state.cosmetics) state.cosmetics = { owned: {}, on: {} };
 
+    // Turn an item on and turn off other items in the same slot
+    function turnOn(id) {
+      const item = COSMETICS.find(c => c.id === id);
+      COSMETICS.forEach(c => { if (c.slot === item.slot) state.cosmetics.on[c.id] = false; });
+      state.cosmetics.on[id] = true;
+    }
+
     function applyCosmetics() {
       document.body.classList.toggle("wowBg", !!state.cosmetics.on.wowBg);
+      document.body.classList.toggle("royalBg", !!state.cosmetics.on.royalBg);
       $("coin").classList.toggle("wowCoin", !!state.cosmetics.on.wowCoin);
     }
 
     function renderCosmetics() {
-      $("cosmetics").innerHTML = COSMETICS.map(c => {
+      const card = (c) => {
         const owned = !!state.cosmetics.owned[c.id], on = !!state.cosmetics.on[c.id];
         const action = owned
           ? `<span class="muted">${on ? "On" : "Off"}</span>
@@ -4127,7 +4142,12 @@
         return `<div class="cosmetic ${on ? "on" : ""}">${c.preview}
           <div class="info"><b>${c.name}</b><div class="muted">${c.desc}</div>
             <div class="row">${action}</div></div></div>`;
-      }).join("");
+      };
+      $("cosmetics").innerHTML = COLLECTIONS.map(col => `
+        <div class="card">
+          <h2 style="margin:0">${col.name}</h2>
+          <div class="cosmetics">${COSMETICS.filter(c => c.collection === col.id).map(card).join("")}</div>
+        </div>`).join("");
     }
 
     $("cosmetics").addEventListener("click", (e) => {
@@ -4138,13 +4158,16 @@
         if (!c || state.cosmetics.owned[c.id] || state.money < c.price) return;
         state.money -= c.price;
         state.cosmetics.owned[c.id] = true;
-        state.cosmetics.on[c.id] = true;          // switch it on right away
+        turnOn(c.id);                             // switch it on right away
         showNotice("🛍️ Bought " + c.name + "!");
       }
       const tog = e.target.closest("[data-cosmetic-toggle]");
       if (tog) {
         const id = tog.dataset.cosmeticToggle;
-        if (state.cosmetics.owned[id]) state.cosmetics.on[id] = !state.cosmetics.on[id];
+        if (state.cosmetics.owned[id]) {
+          if (state.cosmetics.on[id]) state.cosmetics.on[id] = false;
+          else turnOn(id);
+        }
       }
       if (buy || tog) { applyCosmetics(); renderCosmetics(); updateCounter(); save(); }
     });

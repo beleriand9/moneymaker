@@ -54,6 +54,8 @@
     }
     #coin.wowCoin { background: url("assets/wow-coin.webp") center / contain no-repeat; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55); }
     #coin.wowCoin::after { content: none; }
+    #coin.royalCoin { background: url("assets/royal-coin.webp") center / contain no-repeat; box-shadow: none; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
+    #coin.royalCoin::after { content: none; }
 
     #shop {
       width: 420px;
@@ -4115,6 +4117,8 @@
         preview: `<div class="preview"><img src="assets/wow-coin.webp" alt="Wow So Rich coin"></div>` },
       { id: "royalBg", collection: "royal", slot: "background", name: "Royal Background", price: 25000000, desc: "His Majesty the Cat, glowing over the whole game.",
         preview: `<div class="preview" style="background-image:url('assets/royal-background-thumb.jpg')"></div>` },
+      { id: "royalCoin", collection: "royal", slot: "coin", name: "Royal Coin", price: 25000000, desc: "Replaces the coin you click with His Majesty's golden coin.",
+        preview: `<div class="preview"><img src="assets/royal-coin.webp" alt="Royal coin"></div>` },
     ];
     if (!state.cosmetics) state.cosmetics = { owned: {}, on: {} };
 
@@ -4129,6 +4133,7 @@
       document.body.classList.toggle("wowBg", !!state.cosmetics.on.wowBg);
       document.body.classList.toggle("royalBg", !!state.cosmetics.on.royalBg);
       $("coin").classList.toggle("wowCoin", !!state.cosmetics.on.wowCoin);
+      $("coin").classList.toggle("royalCoin", !!state.cosmetics.on.royalCoin);
     }
 
     function renderCosmetics() {

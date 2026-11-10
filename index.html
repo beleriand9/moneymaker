@@ -278,6 +278,36 @@
     }
     .pcard.deal { animation: dealIn 0.35s ease-out; }
     @keyframes dealIn { from { opacity: 0; transform: translate(0, -60px) rotate(-8deg) scale(0.8); } to { opacity: 1; transform: none; } }
+    /* Ultimate Texas Hold'em */
+    .uthRow { text-align: center; }
+    .uthRow .pcard, .uthSeat .pcard { width: 54px; height: 76px; font-size: 24px; }
+    .uthRow .pcard .corner, .uthSeat .pcard .corner { font-size: 13px; }
+    .uthRow .cardsRow, .uthSeat .cardsRow { min-height: 78px; gap: 5px; }
+    .uthBoard { margin: 14px 0; padding: 10px 0; border-top: 1px dashed rgba(255,255,255,0.2); border-bottom: 1px dashed rgba(255,255,255,0.2); }
+    .pcard.slot { background: rgba(0,0,0,0.18); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18); }
+    .uthSeats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .uthSeat { border: 2px dashed rgba(255,255,255,0.3); border-radius: 14px; padding: 10px; text-align: center; }
+    .uthSeat.active { border-style: solid; border-color: #ffd34d; background: rgba(255, 211, 77, 0.08); box-shadow: 0 0 14px rgba(255, 211, 77, 0.3); }
+    .uthSeat.folded .cardsRow { opacity: 0.4; }
+    .uthSpots { display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .uthSpot {
+      width: 66px; height: 66px; border-radius: 50%; border: 2px dashed rgba(255,255,255,0.6); background: rgba(10, 20, 50, 0.3);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: #fff; font-size: 10px; line-height: 1.1;
+    }
+    .uthSpot.click { cursor: pointer; }
+    .uthSpot.click:hover { border-color: #ffd34d; background: rgba(255, 211, 77, 0.12); }
+    .uthSpot.has { border-style: solid; }
+    .uthSpot .chipMark { width: 30px; height: 30px; font-size: 9px; }
+    .uthSpot.win { border-color: #5fd68e; box-shadow: 0 0 10px rgba(95, 214, 142, 0.6); }
+    .uthSpot.lose { opacity: 0.45; }
+    .uthHandName { font-weight: 800; font-size: 13px; color: #d7f5df; min-height: 18px; margin-top: 4px; }
+    .uthResult { font-weight: 900; margin-top: 4px; }
+    .uthResult.win { color: #7dffa8; } .uthResult.lose { color: #ff8a8a; } .uthResult.push { color: #ffd34d; }
+    .uthPayInfo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; }
+    .uthPayInfo table { width: 100%; border-collapse: collapse; }
+    .uthPayInfo td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .uthPayInfo td:last-child { text-align: right; }
+    @media (max-width: 640px) { .uthSeats, .uthPayInfo { grid-template-columns: 1fr; } }
     /* Video poker */
     .vpJackpot {
       text-align: center; margin: 12px 0 0; padding: 10px; border-radius: 12px;
@@ -2213,6 +2243,9 @@
       { id: "vpLow",   name: "Video Poker: Classic table", emoji: "🎴", desc: "Jacks or Better with a joker (53 cards). Bets from 100 to 5,000. Jackpot 250,000." },
       { id: "vpHigh",  name: "Video Poker: High rollers",  emoji: "🎴💎", desc: "Jacks or Better with a joker (53 cards). Bets from 5,000 to 250,000. Jackpot 12.5 scoin." },
       { id: "vpSuper", name: "Video Poker: Super high rollers", emoji: "🎴💎💎", desc: "Jacks or Better with a joker (53 cards). Bets from 10 to 500 scoin. Jackpot 25 gcoin." },
+      { id: "uthLow",   name: "Ultimate Texas Hold'em: Classic table", emoji: "🤠", desc: "Beat the dealer's poker hand. Play 1 or 2 seats. Ante 100 to 5,000 (+ equal Blind, optional Trips)." },
+      { id: "uthHigh",  name: "Ultimate Texas Hold'em: High rollers",  emoji: "🤠💎", desc: "Beat the dealer's poker hand. Play 1 or 2 seats. Ante 5,000 to 250,000 (+ equal Blind, optional Trips)." },
+      { id: "uthSuper", name: "Ultimate Texas Hold'em: Super high rollers", emoji: "🤠💎💎", desc: "Beat the dealer's poker hand. Play 1 or 2 seats. Ante 10 to 500 scoin (+ equal Blind, optional Trips)." },
       { id: "plinkoSuper", name: "Plinko: Super high rollers", emoji: "💎🔻", desc: "Same pyramid, 0.3× to 250×, up to 20 balls. Bets from 10 to 50 scoin per ball." },
       { id: "plinko", name: "Plinko", emoji: "🔻", desc: "Drop up to 20 balls down a peg pyramid into multipliers from 0.3× to 250×. Bets 5,000 – 250,000 per ball." },
       { id: "climb",  name: "Sky Climb", emoji: "🎈", desc: "Draw balls to climb a 20-step ladder up to 50,000×. Cash out before a red ball pops your balloon! Bets 10,000 – 250,000." },
@@ -2220,7 +2253,7 @@
     // Game groups in the casino lobby (games show in this order inside each group)
     const CASINO_GROUPS = [
       { name: "🎡 Roulette games", games: ["rouletteLow", "rouletteHigh", "rouletteSuper"] },
-      { name: "🃏 Card games",     games: ["bjLow", "bjHigh", "bjSuper", "vpLow", "vpHigh", "vpSuper"] },
+      { name: "🃏 Card games",     games: ["bjLow", "bjHigh", "bjSuper", "vpLow", "vpHigh", "vpSuper", "uthLow", "uthHigh", "uthSuper"] },
       { name: "🔻 Ball games",     games: ["plinko", "plinkoSuper", "climb"] },
     ];
     let currentGame = null;   // null = game list
@@ -2309,6 +2342,7 @@
       if (ROULETTE_TABLES[currentGame]) { roulette = ROULETTE_TABLES[currentGame]; renderRoulette(); }
       if (BJ_TABLES[currentGame]) { bj = BJ_TABLES[currentGame]; renderBlackjack(); }
       if (VP_TABLES[currentGame]) { vp = VP_TABLES[currentGame]; renderVideoPoker(); }
+      if (UTH_TABLES[currentGame]) { uth = UTH_TABLES[currentGame]; renderUth(); }
       if (currentGame === "climb") renderClimb();
       if (PLINKO_TABLES[currentGame]) {
         const cfg = PLINKO_TABLES[currentGame];
@@ -2321,7 +2355,7 @@
       const card = e.target.closest("[data-game]");
       if (card) { currentGame = card.dataset.game; renderCasino(); }
       const back = e.target.closest("[data-back]");
-      if (back && !roulette.spinning && !(bj && bj.phase !== "betting") && !(currentGame === "climb" && climb.active) && !(PLINKO_TABLES[currentGame] && plinko.balls.length) && !(VP_TABLES[currentGame] && vp.phase !== "betting")) { currentGame = null; renderCasino(); }
+      if (back && !roulette.spinning && !(bj && bj.phase !== "betting") && !(currentGame === "climb" && climb.active) && !(PLINKO_TABLES[currentGame] && plinko.balls.length) && !(VP_TABLES[currentGame] && vp.phase !== "betting") && !(UTH_TABLES[currentGame] && uth.phase !== "betting")) { currentGame = null; renderCasino(); }
     });
 
     /* =====================================================================
@@ -4008,6 +4042,370 @@
       if (a === "clear") { state.vp[t.id].bet = 0; t.message = ""; renderVideoPoker(); save(); }
       if ((a === "holdAll" || a === "holdNone") && t.phase === "holding" && !t.busy) { t.held = t.held.map(() => a === "holdAll"); renderVideoPoker(); }
       if (a === "togglePay") { state.vpPayHidden = !state.vpPayHidden; renderVideoPoker(); save(); }
+    });
+
+    /* =====================================================================
+       ULTIMATE TEXAS HOLD'EM (standard casino rules, one 52-card deck per round)
+       Bets per seat: Ante + an equal Blind, optional Trips. Up to 2 seats.
+       Before the flop: check or raise 3x/4x the ante. After the flop: check or raise 2x.
+       After the river: raise 1x or fold. You can raise only once per hand.
+       Showdown (best 5 of 7 cards):
+         Play pays 1:1 if you beat the dealer.
+         Ante pays 1:1 if you win, but pushes if the dealer has less than a pair.
+         Blind pays by the table below when you win with a straight or better, otherwise pushes on a win.
+         A tie pushes Ante, Blind and Play. Folding loses Ante and Blind.
+         Trips pays on your own hand whatever the dealer has (even if you fold).
+       ===================================================================== */
+    const PK_NAMES = ["High Card", "Pair", "Two Pair", "Three of a Kind", "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush", "Royal Flush"];
+    const UTH_BLIND_PAYS = { 9: 500, 8: 50, 7: 10, 6: 3, 5: 1.5, 4: 1 };       // X to 1
+    const UTH_TRIPS_PAYS = { 9: 50, 8: 40, 7: 30, 6: 9, 5: 7, 4: 4, 3: 3 };    // X to 1
+    const PK_VAL = { "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14 };
+
+    // Score of exactly 5 cards: higher is better. Category = Math.floor(score / 15^5)
+    function pkScore5(cards) {
+      const v = cards.map(c => PK_VAL[c.r]).sort((a, b) => b - a);
+      const flush = cards.every(c => c.s === cards[0].s);
+      const counts = {};
+      v.forEach(x => counts[x] = (counts[x] || 0) + 1);
+      const groups = Object.entries(counts).map(([val, n]) => [Number(val), n]).sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+      const unique = groups.length === 5;
+      let straightTop = 0;
+      if (unique && v[0] - v[4] === 4) straightTop = v[0];
+      if (unique && v[0] === 14 && v[1] === 5) straightTop = 5;   // A-2-3-4-5
+      let cat, tie;
+      if (straightTop && flush) { cat = straightTop === 14 ? 9 : 8; tie = [straightTop]; }
+      else if (groups[0][1] === 4) { cat = 7; tie = groups.map(g => g[0]); }
+      else if (groups[0][1] === 3 && groups[1][1] === 2) { cat = 6; tie = groups.map(g => g[0]); }
+      else if (flush) { cat = 5; tie = v; }
+      else if (straightTop) { cat = 4; tie = [straightTop]; }
+      else if (groups[0][1] === 3) { cat = 3; tie = groups.map(g => g[0]); }
+      else if (groups[0][1] === 2 && groups[1][1] === 2) { cat = 2; tie = groups.map(g => g[0]); }
+      else if (groups[0][1] === 2) { cat = 1; tie = groups.map(g => g[0]); }
+      else { cat = 0; tie = v; }
+      let score = cat;
+      for (let i = 0; i < 5; i++) score = score * 15 + (tie[i] || 0);
+      return score;
+    }
+    // Best 5 of 7 cards
+    function pkBest(cards) {
+      let best = -1;
+      for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++) {
+        const five = cards.filter((_, i) => i !== a && i !== b);
+        const sc = pkScore5(five);
+        if (sc > best) best = sc;
+      }
+      return best;
+    }
+    const pkCat = (score) => Math.floor(score / 759375);   // 15^5
+
+    function makeUthTable(id, title, emoji, min, max, chips) {
+      return { id, title, emoji, min, max, chips, chip: chips[0],
+               phase: "betting", deck: [], dealer: [], board: [], hands: [], active: -1, busy: false, message: "",
+               lastBets: null };
+    }
+    const UTH_TABLES = {
+      uthLow:   makeUthTable("uthLow",   "Ultimate Texas Hold'em: Classic table", "🤠", 100, 5000, [100, 500, 1000, 5000]),
+      uthHigh:  makeUthTable("uthHigh",  "Ultimate Texas Hold'em: High rollers",  "🤠💎", 5000, 250000, [5000, 10000, 25000, 50000, 100000, 250000]),
+      uthSuper: makeUthTable("uthSuper", "Ultimate Texas Hold'em: Super high rollers", "🤠💎💎", 10000000, 500000000, [10000000, 25000000, 50000000, 100000000, 250000000, 500000000]),
+    };
+    let uth = null;
+
+    // Bets on the spots are saved. Money that was in a round when the page closed is given back.
+    if (!state.uth) state.uth = {};
+    for (const id in UTH_TABLES) {
+      const saved = state.uth[id] || {};
+      if (saved.inPlay > 0) state.casinoChips += saved.inPlay;
+      state.uth[id] = { seats: saved.seats || [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }], inPlay: 0 };
+    }
+    const uthSeats = (t) => state.uth[t.id].seats;
+    const uthDelay = () => (window.UTH_FAST ? 0 : 320);
+    const uthCost = (seats) => seats.reduce((a, s) => a + s.ante * 2 + s.trips, 0);   // ante + equal blind + trips
+
+    function uthNewDeck() {
+      const deck = [];
+      for (const s of SUITS) for (const r of RANKS) deck.push({ r, s });
+      for (let i = deck.length - 1; i > 0; i--) { const j = secureRandomInt(i + 1); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+      return deck;
+    }
+    const uthDraw = (t) => { const c = t.deck.pop(); c.fresh = true; return c; };
+
+    async function uthDeal() {
+      const t = uth, seats = uthSeats(t);
+      if (!seats.some(s => s.ante > 0)) return uthMsg("Put an Ante on at least one seat.");
+      if (seats.some(s => s.ante > 0 && s.ante < t.min)) return uthMsg("Minimum ante is " + fmt(t.min) + ".");
+      t.busy = true; t.phase = "dealing"; t.message = "";
+      t.lastBets = seats.map(s => ({ ...s }));
+      state.uth[t.id].inPlay = uthCost(seats);
+      t.hands = [];
+      seats.forEach((s, seat) => {
+        if (s.ante > 0) t.hands.push({ seat, ante: s.ante, blind: s.ante, trips: s.trips, play: 0, cards: [], folded: false, decided: false });
+      });
+      state.uth[t.id].seats = [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }];
+      t.deck = uthNewDeck(); t.dealer = []; t.board = [];
+      save();
+      for (let round = 0; round < 2; round++) {
+        for (const h of t.hands) { h.cards.push(uthDraw(t)); renderUth(); await sleep(uthDelay()); }
+        const d = uthDraw(t); d.hidden = true; t.dealer.push(d); renderUth(); await sleep(uthDelay());
+      }
+      t.street = "pre";
+      t.busy = false; t.phase = "playing";
+      uthNext();
+    }
+
+    // Find the next hand that still has to decide on this street, or move to the next street
+    async function uthNext() {
+      const t = uth;
+      const i = t.hands.findIndex(h => !h.folded && h.play === 0 && !h.decided);
+      if (i >= 0) { t.active = i; renderUth(); return; }
+      t.active = -1; t.busy = true;
+      t.hands.forEach(h => h.decided = false);
+      if (t.street === "pre") {
+        for (let k = 0; k < 3; k++) { t.board.push(uthDraw(t)); renderUth(); await sleep(uthDelay()); }
+        t.street = "flop";
+      } else if (t.street === "flop") {
+        for (let k = 0; k < 2; k++) { t.board.push(uthDraw(t)); renderUth(); await sleep(uthDelay()); }
+        t.street = "river";
+      } else {
+        return uthShowdown();
+      }
+      t.busy = false;
+      uthNext();
+    }
+
+    // Raise options for the hand that is deciding
+    const uthRaises = (t) => t.street === "pre" ? [4, 3] : t.street === "flop" ? [2] : [1];
+
+    function uthAction(a) {
+      const t = uth, h = t.hands[t.active];
+      if (!h || t.busy) return;
+      if (a.startsWith("raise")) {
+        const x = Number(a.slice(5)), cost = h.ante * x;
+        if (!uthRaises(t).includes(x)) return;
+        if (state.casinoChips < cost) return uthMsg("Not enough chips to raise " + fmt(cost) + ".");
+        state.casinoChips -= cost;
+        state.uth[t.id].inPlay += cost;
+        h.play = cost;
+      } else if (a === "fold") {
+        if (t.street !== "river") return;
+        h.folded = true;
+      }
+      h.decided = true;
+      t.message = "";
+      updateCounter(); save();
+      uthNext();
+    }
+
+    async function uthShowdown() {
+      const t = uth;
+      t.dealer.forEach(c => { c.hidden = false; c.fresh = true; });
+      renderUth(); await sleep(uthDelay());
+      const dScore = pkBest([...t.dealer, ...t.board]);
+      const qualifies = pkCat(dScore) >= 1;
+      t.dealerHand = PK_NAMES[pkCat(dScore)];
+      let wagered = 0, back = 0, cashback = 0;
+      for (const h of t.hands) {
+        const pScore = pkBest([...h.cards, ...t.board]), cat = pkCat(pScore);
+        h.handName = PK_NAMES[cat];
+        const bet = h.ante + h.blind + h.play + h.trips;
+        let ret = 0;
+        h.spots = {};
+        if (h.folded) {
+          h.outcome = "Folded"; h.spots.ante = h.spots.blind = "lose";
+        } else if (pScore > dScore) {
+          h.outcome = "Win";
+          ret += h.play * 2;                                        h.spots.play = "win";
+          if (qualifies) { ret += h.ante * 2; h.spots.ante = "win"; } else { ret += h.ante; h.spots.ante = "push"; }
+          if (UTH_BLIND_PAYS[cat]) { ret += h.blind * (1 + UTH_BLIND_PAYS[cat]); h.spots.blind = "win"; } else { ret += h.blind; h.spots.blind = "push"; }
+        } else if (pScore === dScore) {
+          h.outcome = "Tie";
+          ret += h.ante + h.blind + h.play; h.spots.ante = h.spots.blind = h.spots.play = "push";
+        } else {
+          h.outcome = "Lose";
+          h.spots.play = h.spots.blind = "lose";
+          if (qualifies) h.spots.ante = "lose"; else { ret += h.ante; h.spots.ante = "push"; }
+        }
+        if (h.trips > 0) {
+          if (UTH_TRIPS_PAYS[cat]) { ret += h.trips * (1 + UTH_TRIPS_PAYS[cat]); h.spots.trips = "win"; } else h.spots.trips = "lose";
+        }
+        h.back = ret; h.bet = bet;
+        const lost = Math.max(0, bet - ret);
+        cashback += lost * cashbackRate();
+        wagered += bet; back += ret;
+      }
+      state.casinoChips += back + cashback;
+      casinoRecord(wagered, back + cashback);
+      state.uth[t.id].inPlay = 0;
+      const levelsGained = addXp(wagered);   // 1 XP per bcoin bet (raises and Trips count)
+      const net = back - wagered;
+      t.message = `Dealer has ${t.dealerHand}${qualifies ? "" : " (doesn't qualify: Antes push)"}. ` +
+        (net > 0 ? `You won ${fmt(net)}!` : net < 0 ? `You lost ${fmt(-net)}.` : "You broke even.") +
+        (cashback > 0 ? ` Cashback +${cashback.toLocaleString(undefined, { maximumFractionDigits: 1 })}.` : "") +
+        (levelsGained > 0 ? ` 🎉 Level up! Now level ${levelInfo(state.casinoXp).level}.` : "");
+      t.phase = "betting"; t.street = null; t.busy = false; t.active = -1;
+      updateCounter(); save();
+      renderUth();
+    }
+
+    function uthMsg(text) { if (uth) { uth.message = text; renderUth(); } }
+
+    function renderUth() {
+      const t = uth, betting = t.phase === "betting";
+      const seats = uthSeats(t);
+      const freshRound = betting && seats.some(s => s.ante > 0 || s.trips > 0);   // new bets placed: clear the old cards
+      const showCards = !freshRound;
+      const slotCard = `<div class="pcard slot"></div>`;
+      const cardsOf = (arr, n) => { let h = arr.map(cardHtml).join(""); for (let i = arr.length; i < n; i++) h += slotCard; return h; };
+
+      const spot = (label, amount, opts = {}) => `
+        <div class="uthSpot ${amount ? "has" : ""} ${opts.click ? "click" : ""} ${opts.res || ""}" ${opts.click ? `data-uthspot="${opts.click}"` : ""}>
+          ${amount ? chipMark(amount) : ""}<b>${label}</b><span>${amount ? fmt(amount) : opts.hint || ""}</span></div>`;
+
+      const seatHtml = [0, 1].map(seat => {
+        const h = t.hands.find(x => x.seat === seat);
+        if (betting && (freshRound || !h)) {
+          const s = seats[seat];
+          return `<div class="uthSeat">
+            <div class="muted">Seat ${seat + 1}${s.ante ? "" : " · empty"}</div>
+            <div class="cardsRow">${slotCard}${slotCard}</div>
+            <div class="uthSpots">
+              ${spot("Ante", s.ante, { click: seat + "-ante", hint: "click" })}
+              ${spot("Blind", s.ante, { hint: "= ante" })}
+              ${spot("Trips", s.trips, { click: seat + "-trips", hint: "optional" })}
+            </div></div>`;
+        }
+        const i = t.hands.indexOf(h);
+        const done = betting;
+        const resCls = !done ? "" : h.back > h.bet ? "win" : h.back === h.bet ? "push" : "lose";
+        const sp = h.spots || {};
+        return `<div class="uthSeat ${i === t.active ? "active" : ""} ${h.folded ? "folded" : ""}">
+          <div class="muted">Seat ${seat + 1}${i === t.active ? " · your move" : ""}</div>
+          <div class="cardsRow">${h.cards.map(cardHtml).join("")}</div>
+          <div class="uthHandName">${done ? h.handName : t.board.length >= 3 && !h.folded ? PK_NAMES[pkCat(uthPartial(h, t))] : ""}</div>
+          <div class="uthSpots">
+            ${spot("Ante", h.ante, { res: sp.ante })}${spot("Blind", h.blind, { res: sp.blind })}
+            ${spot("Play", h.play, { res: sp.play, hint: h.folded ? "folded" : "—" })}${h.trips ? spot("Trips", h.trips, { res: sp.trips }) : ""}
+          </div>
+          ${done ? `<div class="uthResult ${resCls}">${h.outcome}${h.back > h.bet ? " · +" + fmt(h.back - h.bet) : h.back < h.bet ? " · −" + fmt(h.bet - h.back) : ""}</div>` : ""}
+        </div>`;
+      }).join("");
+
+      let actions = "";
+      const total = uthCost(seats);
+      if (betting) {
+        const last = t.lastBets ? uthCost(t.lastBets) : 0;
+        actions = `
+          <button class="btn" data-uth="deal" ${seats.some(s => s.ante >= t.min) && !t.busy ? "" : "disabled"}>🤠 Deal (bet ${fmt(total)})</button>
+          <button class="btn ghost" data-uth="clear" ${total ? "" : "disabled"}>Clear bets</button>
+          <button class="btn ghost" data-uth="rebet" ${last ? "" : "disabled"}>↺ Repeat last bets${last ? " (" + fmt(last) + ")" : ""}</button>`;
+      } else if (t.active >= 0 && !t.busy) {
+        const h = t.hands[t.active];
+        const raises = uthRaises(t).map(x => `<button class="btn" data-uth="raise${x}" ${state.casinoChips >= h.ante * x ? "" : "disabled"}>Raise ${x}× (${fmt(h.ante * x)})</button>`).join("");
+        const passive = t.street === "river"
+          ? `<button class="btn ghost" data-uth="fold">🏳️ Fold</button>`
+          : `<button class="btn ghost" data-uth="check">Check</button>`;
+        const where = t.street === "pre" ? "Before the flop" : t.street === "flop" ? "After the flop" : "After the river";
+        actions = `<span class="muted" style="align-self:center">Seat ${h.seat + 1} · ${where}:</span>${raises}${passive}`;
+      } else {
+        actions = `<span class="muted" style="align-self:center">Dealing...</span>`;
+      }
+
+      const dealerName = betting && showCards && t.dealerHand ? t.dealerHand : "";
+      $("casinoGame").innerHTML = `
+        <div class="card">
+          <div class="row"><div><h2 style="margin:0">${t.emoji} ${t.title}</h2>
+            <div class="muted">Ante ${fmt(t.min)} – ${fmt(t.max)} per seat · Blind = Ante · Trips optional (up to ${fmt(t.max)}) · Play 1 or 2 seats</div></div>
+            <button class="btn ghost small" data-back="1" ${betting && !t.busy ? "" : "disabled"}>← All games</button></div>
+
+          <div class="vpPayHead"><b>📋 Payouts</b>
+            <button class="btn ghost small" data-uth="togglePay">${state.uthPayHidden ? "▸ Show" : "▾ Minimize"}</button></div>
+          ${state.uthPayHidden ? `<div class="muted">Blind: Royal 500:1 … Straight 1:1 · Trips: Royal 50:1 … Three of a Kind 3:1</div>` : `
+          <div class="uthPayInfo">
+            <div><b>Blind</b> (when you win)<table>${[9, 8, 7, 6, 5, 4].map(c => `<tr><td>${PK_NAMES[c]}</td><td>${UTH_BLIND_PAYS[c] === 1.5 ? "3:2" : UTH_BLIND_PAYS[c] + ":1"}</td></tr>`).join("")}
+              <tr><td>Lower hands</td><td>push</td></tr></table></div>
+            <div><b>Trips</b> (your hand, win or lose)<table>${[9, 8, 7, 6, 5, 4, 3].map(c => `<tr><td>${PK_NAMES[c]}</td><td>${UTH_TRIPS_PAYS[c]}:1</td></tr>`).join("")}</table></div>
+          </div>`}
+
+          <div class="bjFelt">
+            <div class="uthRow">
+              <div class="bjLabel">Dealer</div>
+              <div class="cardsRow">${showCards ? cardsOf(t.dealer, 2) : slotCard + slotCard}</div>
+              <div class="uthHandName">${dealerName}</div>
+            </div>
+            <div class="uthRow uthBoard">
+              <div class="bjLabel">Board</div>
+              <div class="cardsRow">${showCards ? cardsOf(t.board, 5) : slotCard.repeat(5)}</div>
+            </div>
+            <div class="uthSeats">${seatHtml}</div>
+          </div>
+
+          ${betting ? `<div class="chipsRow">
+            <span class="muted">Chip:</span>
+            ${t.chips.map(v => `<button class="chip ${v === t.chip ? "selected" : ""}" data-uthchip="${v}"
+                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
+            <span class="muted">Click Ante or Trips on a seat to add the chip. The Blind matches the Ante.</span>
+          </div>` : ""}
+          <div class="bjActions">${actions}</div>
+          <div id="casinoMsg" class="${/won|broke even/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
+          <div class="muted" style="margin-top:6px; text-align:center">Raise 3× or 4× before the flop, 2× after the flop, or 1× after the river (once per hand) · The dealer needs a pair to qualify, otherwise Antes push · Best 5 of 7 cards</div>
+        </div>`;
+      t.dealer.forEach(c => c.fresh = false); t.board.forEach(c => c.fresh = false);
+      t.hands.forEach(h => h.cards.forEach(c => c.fresh = false));
+    }
+    // Your best hand so far (2 cards + visible board), shown under your cards
+    function uthPartial(h, t) {
+      const cards = [...h.cards, ...t.board];
+      if (cards.length === 7) return pkBest(cards);
+      let best = -1;   // 5 or 6 cards: best 5 of them
+      const n = cards.length;
+      for (let skip = 0; skip < (n === 6 ? 6 : 1); skip++) {
+        const five = n === 6 ? cards.filter((_, i) => i !== skip) : cards;
+        best = Math.max(best, pkScore5(five));
+      }
+      return best;
+    }
+
+    $("casinoGame").addEventListener("click", (e) => {
+      if (!UTH_TABLES[currentGame] || isPaused()) return;
+      const t = uth;
+      const chip = e.target.closest("[data-uthchip]");
+      if (chip) { t.chip = Number(chip.dataset.uthchip); renderUth(); return; }
+      const sp = e.target.closest("[data-uthspot]");
+      if (sp && t.phase === "betting" && !t.busy) {
+        const [seatStr, kind] = sp.dataset.uthspot.split("-");
+        const s = uthSeats(t)[Number(seatStr)], v = t.chip;
+        if (kind === "ante") {
+          if (s.ante + v > t.max) return uthMsg("Table limit: max ante " + fmt(t.max) + ".");
+          if (state.casinoChips < v * 2) return uthMsg("Not enough chips (Ante + Blind = " + fmt(v * 2) + ").");
+          state.casinoChips -= v * 2; s.ante += v;
+        } else {
+          if (!s.ante) return uthMsg("Put an Ante on this seat first.");
+          if (s.trips + v > t.max) return uthMsg("Table limit: max Trips " + fmt(t.max) + ".");
+          if (state.casinoChips < v) return uthMsg("Not enough chips. Add money to the casino first.");
+          state.casinoChips -= v; s.trips += v;
+        }
+        t.message = "";
+        updateCounter(); renderUth(); save();
+        return;
+      }
+      const btn = e.target.closest("[data-uth]");
+      if (!btn || btn.disabled) return;
+      const a = btn.dataset.uth;
+      if (a === "togglePay") { state.uthPayHidden = !state.uthPayHidden; renderUth(); save(); return; }
+      if (a === "deal" && t.phase === "betting" && !t.busy) uthDeal();
+      if (a === "clear" && t.phase === "betting") {
+        state.casinoChips += uthCost(uthSeats(t));
+        state.uth[t.id].seats = [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }];
+        t.message = ""; updateCounter(); renderUth(); save();
+      }
+      if (a === "rebet" && t.phase === "betting" && t.lastBets) {
+        const seats = uthSeats(t), need = uthCost(t.lastBets);
+        if (t.lastBets.some((b, i) => seats[i].ante + b.ante > t.max || seats[i].trips + b.trips > t.max)) return uthMsg("That would go over the table limit.");
+        if (state.casinoChips < need) return uthMsg("Not enough chips to repeat (" + fmt(need) + " needed).");
+        state.casinoChips -= need;
+        t.lastBets.forEach((b, i) => { seats[i].ante += b.ante; seats[i].trips += b.trips; });
+        t.message = ""; updateCounter(); renderUth(); save();
+      }
+      if (t.phase === "playing" && (a.startsWith("raise") || a === "check" || a === "fold")) uthAction(a);
     });
 
     /* =====================================================================

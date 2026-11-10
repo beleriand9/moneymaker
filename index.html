@@ -5770,7 +5770,8 @@
         const route = routes[r];
         const seconds = (route.min * 60) + secureRandomInt((route.max - route.min) * 60 + 1);   // random time in the range
         const profit = Math.round(route.rate * seconds * (0.95 + secureRandomInt(101) / 1000));    // ±5%
-        return { route: r, seconds, profit };
+        // ⭐ Global Empire picked twice: every contract takes half the time for the same pay
+        return { route: r, seconds: state.legacy.empire >= 2 ? Math.round(seconds / 2) : seconds, profit };
       });
     }
     const ROUTES = FLEETS.tanker.routes;   // (kept for older code and tests)
@@ -6105,8 +6106,9 @@
        Always kept: achievements, Gambler & Investor levels, cosmetics, statistics, Legacy, VIP coins.
        Choices (each can be picked again on later prestiges):
          tycoon  +25% income (businesses, special businesses, clicks) for every pick
-         empire  keep your trucks, tankers, cargo planes, warehouses and Trading Port this time
-         vip     VIP coins: 500 scoin every 20 min for the Super high roller tables (15, then 10 min with more picks)
+         empire  (max 2) 1st: keep your trucks, tankers, cargo planes, warehouses and Trading Port on every reset from now on
+                         2nd: all logistics contracts take half the time (same pay)
+         vip     (max 2) VIP coins: 500 scoin every 20 min for the Super high roller tables; 2nd pick: every 10 min
        ===================================================================== */
     const PRESTIGE_AT = 1e12;    // 1 gcoin
     const PRESTIGE_MAX = 4;      // the 4th prestige finishes the game (you can keep playing)
@@ -6118,10 +6120,16 @@
     const PRESTIGE_CHOICES = [
       { id: "tycoon", icon: "💼", name: "Tycoon's Legacy", text: "+25% income from businesses, special businesses and clicks, forever.",
         now: () => `Now: +${state.legacy.tycoon * 25}% → after: +${(state.legacy.tycoon + 1) * 25}%` },
-      { id: "empire", icon: "🚢", name: "Global Empire", text: "Keep all your trucks, oil tankers and cargo planes, plus your warehouses and Trading Port.",
-        now: () => { const n = (x, w) => `${x} ${w}${x === 1 ? "" : "s"}`; return `You'd keep ${n(logi.trucks.length, "truck")}, ${n(logi.tankers.length, "tanker")}, ${n(logi.planes.length, "plane")}`; } },
-      { id: "vip", icon: "🎟️", name: "VIP Coins", text: "500 scoin of free-bet VIP coins every 20 minutes, for the Super high roller tables. Wins become casino chips.",
-        now: () => state.legacy.vip ? `Now every ${vipMinutes()} min → after: every ${vipMinutes(state.legacy.vip + 1)} min` : "Saves up to 1,500 scoin (3 bonuses)" },
+      { id: "empire", icon: "🚢", name: "Global Empire", max: 2,
+        text: () => state.legacy.empire
+          ? "Level 2: every logistics contract takes half the time, for the same pay."
+          : "Keep all your trucks, oil tankers and cargo planes, plus warehouses and Trading Port, on this and every future reset.",
+        now: () => { const n = (x, w) => `${x} ${w}${x === 1 ? "" : "s"}`; return state.legacy.empire ? "Your fleet is already kept on every reset" : `You'd keep ${n(logi.trucks.length, "truck")}, ${n(logi.tankers.length, "tanker")}, ${n(logi.planes.length, "plane")}`; } },
+      { id: "vip", icon: "🎟️", name: "VIP Coins", max: 2,
+        text: () => state.legacy.vip
+          ? "Level 2: your VIP coins come every 10 minutes instead of every 20."
+          : "500 scoin of free-bet VIP coins every 20 minutes, for the Super high roller tables. Wins become casino chips.",
+        now: () => state.legacy.vip ? "Now every 20 min → after: every 10 min" : "Saves up to 1,500 scoin (3 bonuses)" },
     ];
 
     function showPrestigeOffer() {
@@ -6130,16 +6138,23 @@
         <p>You can <b>prestige</b>: start the game over and choose a permanent Legacy bonus.</p>
         <p><b style="color:#ffd34d">Prestige ${n} of ${PRESTIGE_MAX}</b>${n === PRESTIGE_MAX ? " · this is the final one: it finishes the game" : ""}</p>
         <p class="muted">Always kept: achievements, Gambler &amp; Investor levels, cosmetics and statistics${state.legacy.count ? ` · Prestiges so far: ${state.legacy.count}` : ""}.</p>
-        <div class="prestigeChoices">${PRESTIGE_CHOICES.map(c => `
-          <button class="prestigeChoice" data-prestige-pick="${c.id}">
-            <div class="big">${c.icon}</div><b>${c.name}</b>${c.text}<small>${c.now()}</small></button>`).join("")}</div>
+        <div class="prestigeChoices">${PRESTIGE_CHOICES.map(c => {
+          const maxed = c.max && state.legacy[c.id] >= c.max;
+          const level = c.max ? ` <span class="muted">(${state.legacy[c.id] || 0}/${c.max})</span>` : "";
+          const text = typeof c.text === "function" ? c.text() : c.text;
+          return maxed
+            ? `<button class="prestigeChoice" disabled style="opacity:0.45; cursor:default">
+                <div class="big">${c.icon}</div><b>${c.name}${level}</b>Fully upgraded: you can't pick this again.</button>`
+            : `<button class="prestigeChoice" data-prestige-pick="${c.id}">
+                <div class="big">${c.icon}</div><b>${c.name}${level}</b>${text}<small>${c.now()}</small></button>`;
+        }).join("")}</div>
         <button class="btn ghost" data-prestige="later">Not yet</button>`);
       $("modalBox").classList.add("gold");
     }
 
     function showPrestigeConfirm(id) {
       const c = PRESTIGE_CHOICES.find(x => x.id === id);
-      const lost = id === "empire"
+      const lost = id === "empire" || state.legacy.empire > 0
         ? "your money, casino chips, businesses, workers, other special businesses and investments"
         : "your money, casino chips, businesses, workers, special businesses, investments and logistics fleet";
       showModal(`<h2>${c.icon} ${c.name}</h2>
@@ -6154,6 +6169,8 @@
 
     function doPrestige(id) {
       if (!canPrestige()) return;
+      const choice = PRESTIGE_CHOICES.find(c => c.id === id);
+      if (!choice || (choice.max && state.legacy[id] >= choice.max)) return;
       const L = state.legacy;
       L.count++; L[id] = (L[id] || 0) + 1;
       L.history.push({ choice: id, at: Date.now() });
@@ -6165,7 +6182,7 @@
         // all-time logistics counters are statistics: always kept
         logistics: { tankers: [], trucks: [], planes: [], earned: logi.earned, contracts: logi.contracts || 0 },
       };
-      if (id === "empire") {
+      if (L.empire > 0) {   // Global Empire keeps the fleet on every reset after it was picked
         keep.logistics = state.logistics;
         keep.special = { agency: null, warehouses: state.special.warehouses, port: state.special.port };
       }
@@ -6188,8 +6205,8 @@
 
     /* ----- 🎟️ VIP coins: 500 scoin every 20 min (15, then 10 with more picks), saved up to 1,500 ----- */
     var VIP_AMOUNT = 500 * SCOIN, VIP_MAX = 3 * VIP_AMOUNT;
-    function vipMinutes(n = state.legacy.vip) { return Math.max(10, 20 - 5 * (n - 1)); }
-    if (state.legacy.vip > 0 && !state.vip.timer) state.vip.timer = vipMinutes() * 60;
+    function vipMinutes(n = state.legacy.vip) { return n >= 2 ? 10 : 20; }   // 1st pick: every 20 min, 2nd pick: every 10 min
+    if (state.legacy.vip > 0 && (!state.vip.timer || state.vip.timer > vipMinutes() * 60)) state.vip.timer = vipMinutes() * 60;
 
     function vipCanToggle(id) {
       if (id === "rouletteSuper") return !ROULETTE_TABLES[id].spinning && Object.keys(ROULETTE_TABLES[id].bets).length === 0;

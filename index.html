@@ -278,6 +278,35 @@
     }
     .pcard.deal { animation: dealIn 0.35s ease-out; }
     @keyframes dealIn { from { opacity: 0; transform: translate(0, -60px) rotate(-8deg) scale(0.8); } to { opacity: 1; transform: none; } }
+    /* Video poker */
+    .vpJackpot {
+      text-align: center; margin: 12px 0 0; padding: 10px; border-radius: 12px;
+      background: linear-gradient(90deg, #7a4b00, #c98a00, #7a4b00); border: 2px solid #ffd34d;
+      box-shadow: 0 0 18px rgba(255, 211, 77, 0.35);
+    }
+    .vpJackpot .amt { font-size: 30px; font-weight: 900; color: #fff6c9; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+    .vpJackpot .sub { font-size: 13px; color: #ffefb0; }
+    .vpJackpot.won { animation: pulse 0.6s ease-in-out 6; }
+    .vpPay { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    .vpPay td { padding: 3px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .vpPay td:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+    .vpPay tr.hit td { background: rgba(255, 211, 77, 0.25); color: #ffd34d; font-weight: 800; }
+    .vpPay tr.now td { color: #8fd3ff; }
+    .vpPay .jp { color: #ffd34d; }
+    .vpCards { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; min-height: 140px; }
+    .vpSlot { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: default; }
+    .vpSlot.canHold { cursor: pointer; }
+    .vpSlot.canHold:hover .pcard { transform: translateY(-4px); }
+    .vpSlot .pcard { width: 78px; height: 110px; font-size: 34px; transition: transform 0.12s; }
+    .vpSlot .pcard .corner { font-size: 17px; }
+    .vpSlot.held .pcard { box-shadow: 0 0 0 3px #ffd34d, 0 3px 8px rgba(0,0,0,0.45); transform: translateY(-6px); }
+    .vpSlot .holdTag { font-size: 12px; font-weight: 900; letter-spacing: 1px; height: 18px; padding: 0 8px; border-radius: 6px; }
+    .vpSlot.held .holdTag { background: #ffd34d; color: #3a2a00; }
+    .vpCards .pcard.deal { animation-fill-mode: backwards; }
+    .pcard.joker { background: linear-gradient(160deg, #fff 0%, #ffe9a8 100%); color: #6a1b9a; flex-direction: column; font-size: 30px; }
+    .pcard.joker small { font-size: 11px; letter-spacing: 1px; }
+    .vpHandName { text-align: center; margin-top: 10px; font-weight: 800; min-height: 22px; color: #d7f5df; }
+    @media (max-width: 640px) { .vpSlot .pcard { width: 56px; height: 80px; font-size: 24px; } .vpCards { gap: 5px; } }
     .bjSeats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
     .bjSeat {
       border: 2px dashed rgba(255,255,255,0.35); border-radius: 14px; padding: 10px 6px; text-align: center;
@@ -2176,6 +2205,9 @@
       { id: "bjHigh", name: "Blackjack: High rollers",  emoji: "♠️", desc: "Play 1 to 3 hands against the dealer. Bets from 5,000 to 250,000 per hand." },
       { id: "rouletteSuper", name: "Roulette: Super high rollers", emoji: "💎💎", desc: "European roulette, bets from 10 to 500 scoin per spot." },
       { id: "bjSuper", name: "Blackjack: Super high rollers", emoji: "💎♠️", desc: "Play 1 to 3 hands against the dealer. Bets from 10 to 500 scoin per hand." },
+      { id: "vpLow",   name: "Video Poker: Classic table", emoji: "🎴", desc: "Jacks or Better with a joker (53 cards). Bets from 100 to 5,000. Jackpot 250,000." },
+      { id: "vpHigh",  name: "Video Poker: High rollers",  emoji: "🎴💎", desc: "Jacks or Better with a joker (53 cards). Bets from 5,000 to 250,000. Jackpot 12.5 scoin." },
+      { id: "vpSuper", name: "Video Poker: Super high rollers", emoji: "🎴💎💎", desc: "Jacks or Better with a joker (53 cards). Bets from 10 to 500 scoin. Jackpot 25 gcoin." },
       { id: "plinkoSuper", name: "Plinko: Super high rollers", emoji: "💎🔻", desc: "Same pyramid, 0.3× to 250×, up to 20 balls. Bets from 10 to 50 scoin per ball." },
       { id: "plinko", name: "Plinko", emoji: "🔻", desc: "Drop up to 20 balls down a peg pyramid into multipliers from 0.3× to 250×. Bets 5,000 – 250,000 per ball." },
       { id: "climb",  name: "Sky Climb", emoji: "🎈", desc: "Draw balls to climb a 20-step ladder up to 50,000×. Cash out before a red ball pops your balloon! Bets 10,000 – 250,000." },
@@ -2183,7 +2215,7 @@
     // Game groups in the casino lobby (games show in this order inside each group)
     const CASINO_GROUPS = [
       { name: "🎡 Roulette games", games: ["rouletteLow", "rouletteHigh", "rouletteSuper"] },
-      { name: "🃏 Card games",     games: ["bjLow", "bjHigh", "bjSuper"] },
+      { name: "🃏 Card games",     games: ["bjLow", "bjHigh", "bjSuper", "vpLow", "vpHigh", "vpSuper"] },
       { name: "🔻 Ball games",     games: ["plinko", "plinkoSuper", "climb"] },
     ];
     let currentGame = null;   // null = game list
@@ -2271,6 +2303,7 @@
       }
       if (ROULETTE_TABLES[currentGame]) { roulette = ROULETTE_TABLES[currentGame]; renderRoulette(); }
       if (BJ_TABLES[currentGame]) { bj = BJ_TABLES[currentGame]; renderBlackjack(); }
+      if (VP_TABLES[currentGame]) { vp = VP_TABLES[currentGame]; renderVideoPoker(); }
       if (currentGame === "climb") renderClimb();
       if (PLINKO_TABLES[currentGame]) {
         const cfg = PLINKO_TABLES[currentGame];
@@ -2283,7 +2316,7 @@
       const card = e.target.closest("[data-game]");
       if (card) { currentGame = card.dataset.game; renderCasino(); }
       const back = e.target.closest("[data-back]");
-      if (back && !roulette.spinning && !(bj && bj.phase !== "betting") && !(currentGame === "climb" && climb.active) && !(PLINKO_TABLES[currentGame] && plinko.balls.length)) { currentGame = null; renderCasino(); }
+      if (back && !roulette.spinning && !(bj && bj.phase !== "betting") && !(currentGame === "climb" && climb.active) && !(PLINKO_TABLES[currentGame] && plinko.balls.length) && !(VP_TABLES[currentGame] && vp.phase !== "betting")) { currentGame = null; renderCasino(); }
     });
 
     /* =====================================================================
@@ -3700,6 +3733,266 @@
       }
       if (["hit", "stand", "double", "split", "surrender"].includes(a)) bjAction(a);
       if ((a === "insYes" || a === "insNo") && t.insuranceResolve) t.insuranceResolve(a === "insYes");
+    });
+
+    /* =====================================================================
+       VIDEO POKER: Jacks or Better with one joker (53 cards)
+       You get 5 cards, choose which to hold, then draw new cards for the rest.
+       The joker is wild: it becomes whatever card makes the best hand.
+       Paytable (total paid back for a bet of 1). With perfect play it returns about 97.3%,
+       about 98.1% including the jackpot (checked with an exact optimal-strategy solver).
+       JACKPOT = 50 x the table's max bet. Royal Flush wins 100% of it, any Straight Flush
+       (incl. a wild royal) wins 20%. Your share is your bet / max bet, paid on top of the normal win.
+       ===================================================================== */
+    // Hand categories, weakest to strongest
+    const VP_HANDS = [
+      { name: "Nothing",          pays: 0 },
+      { name: "Jacks or Better",  pays: 1 },
+      { name: "Two Pair",         pays: 1 },
+      { name: "Three of a Kind",  pays: 2 },
+      { name: "Straight",         pays: 3 },
+      { name: "Flush",            pays: 4 },
+      { name: "Full House",       pays: 5 },
+      { name: "Four of a Kind",   pays: 15 },
+      { name: "Straight Flush",   pays: 40,  jackpot: 0.2 },
+      { name: "Wild Royal Flush", pays: 80,  jackpot: 0.2 },
+      { name: "Five of a Kind",   pays: 100 },
+      { name: "Royal Flush",      pays: 250, jackpot: 1 },
+    ];
+    const VP_JACKPOT_X = 50;
+    const VP_RANK = { "2": 0, "3": 1, "4": 2, "5": 3, "6": 4, "7": 5, "8": 6, "9": 7, "10": 8, "J": 9, "Q": 10, "K": 11, "A": 12 };
+
+    // Scores 5 cards given as rank numbers (0 = 2 ... 12 = Ace) and suit numbers. Returns a VP_HANDS index.
+    function vpEval5(r, s) {
+      const cnt = new Array(13).fill(0);
+      r.forEach(x => cnt[x]++);
+      const flush = s.every(x => x === s[0]);
+      let mx = 0, pairs = 0, trips = false, hiPair = false;
+      for (let i = 0; i < 13; i++) {
+        if (cnt[i] > mx) mx = cnt[i];
+        if (cnt[i] === 2) { pairs++; if (i >= 9) hiPair = true; }
+        if (cnt[i] === 3) trips = true;
+      }
+      if (mx === 5) return 10;
+      let straight = false, royal = false;
+      if (mx === 1) {
+        const lo = cnt.findIndex(x => x), hi = 12 - [...cnt].reverse().findIndex(x => x);
+        if (hi - lo === 4) straight = true;
+        if (cnt[12] && cnt[0] && cnt[1] && cnt[2] && cnt[3]) straight = true;   // A-2-3-4-5
+        if (lo === 8 && hi === 12) royal = true;
+      }
+      if (straight && flush) return royal ? 11 : 8;
+      if (mx === 4) return 7;
+      if (trips && pairs) return 6;
+      if (flush) return 5;
+      if (straight) return 4;
+      if (trips) return 3;
+      if (pairs === 2) return 2;
+      if (hiPair) return 1;
+      return 0;
+    }
+    // Best hand for 5 cards ({ r, s } or { joker: true }). The joker tries all 52 cards.
+    function vpScore(cards) {
+      const r = [], s = [];
+      let j = -1;
+      cards.forEach((c, i) => {
+        if (c.joker) { j = i; r.push(0); s.push(0); }
+        else { r.push(VP_RANK[c.r]); s.push(SUITS.indexOf(c.s)); }
+      });
+      if (j < 0) return vpEval5(r, s);
+      let best = 0;
+      for (let x = 0; x < 52; x++) {
+        r[j] = x >> 2; s[j] = x & 3;
+        let v = vpEval5(r, s);
+        if (v === 11) v = 9;   // a royal with the joker is a wild royal
+        if (v > best) best = v;
+      }
+      return best;
+    }
+
+    function makeVpTable(id, title, emoji, min, max, chips) {
+      return { id, title, emoji, min, max, chips, jackpot: VP_JACKPOT_X * max,
+               phase: "betting", deck: [], cards: [], held: [false, false, false, false, false],
+               result: null, busy: false, message: "", jackpotWon: false };
+    }
+    const VP_TABLES = {
+      vpLow:   makeVpTable("vpLow",   "Video Poker: Classic table", "🎴", 100, 5000, [100, 500, 1000, 5000]),
+      vpHigh:  makeVpTable("vpHigh",  "Video Poker: High rollers",  "🎴💎", 5000, 250000, [5000, 10000, 25000, 50000, 100000, 250000]),
+      vpSuper: makeVpTable("vpSuper", "Video Poker: Super high rollers", "🎴💎💎", 10000000, 500000000, [10000000, 25000000, 50000000, 100000000, 250000000, 500000000]),
+    };
+    let vp = null;   // the video poker table you are looking at
+
+    // The bet you set is remembered. A bet that was in a hand when the page closed is given back.
+    if (!state.vp) state.vp = {};
+    for (const id in VP_TABLES) {
+      const saved = state.vp[id] || {};
+      if (saved.inPlay > 0) state.casinoChips += saved.inPlay;
+      state.vp[id] = { bet: saved.bet || VP_TABLES[id].min, inPlay: 0 };
+    }
+    const vpBet = (t) => state.vp[t.id].bet;
+    const vpJackpotShare = (t, bet) => t.jackpot * bet / t.max;   // what a 100% jackpot pays for this bet
+
+    function vpDeck() {
+      const deck = [{ joker: true }];
+      for (const s of SUITS) for (const r of RANKS) deck.push({ r, s });
+      for (let i = deck.length - 1; i > 0; i--) { const j = secureRandomInt(i + 1); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+      return deck;
+    }
+    const vpDelay = () => (window.VP_FAST ? 0 : 110);
+
+    async function vpDeal() {
+      const t = vp, bet = vpBet(t);
+      if (bet < t.min || bet > t.max) return vpMsg(`Bet must be between ${fmt(t.min)} and ${fmt(t.max)}.`);
+      if (state.casinoChips < bet) return vpMsg("Not enough chips. Add money to the casino first.");
+      state.casinoChips -= bet;
+      state.vp[t.id].inPlay = bet;
+      t.deck = vpDeck();
+      t.cards = [];
+      t.held = [false, false, false, false, false];
+      t.result = null; t.message = ""; t.jackpotWon = false;
+      t.phase = "holding"; t.busy = true;
+      updateCounter(); save();
+      for (let i = 0; i < 5; i++) { const c = t.deck.pop(); c.fresh = true; t.cards.push(c); renderVideoPoker(); await sleep(vpDelay()); }
+      t.busy = false;
+      renderVideoPoker();
+    }
+
+    async function vpDraw() {
+      const t = vp, bet = state.vp[t.id].inPlay;
+      t.busy = true; t.phase = "drawing";
+      for (let i = 0; i < 5; i++) {
+        if (t.held[i]) continue;
+        const c = t.deck.pop(); c.fresh = true; t.cards[i] = c;
+        renderVideoPoker(); await sleep(vpDelay());
+      }
+      const cat = vpScore(t.cards), hand = VP_HANDS[cat];
+      const back = bet * hand.pays;
+      const jackpot = hand.jackpot ? Math.floor(vpJackpotShare(t, bet) * hand.jackpot) : 0;
+      const lost = Math.max(0, bet - back);
+      const cashback = lost * cashbackRate();
+      state.casinoChips += back + jackpot + cashback;
+      casinoRecord(bet, back + jackpot + cashback);
+      state.vp[t.id].inPlay = 0;
+      const levelsGained = addXp(bet);   // 1 XP per bcoin bet
+
+      t.result = cat;
+      t.jackpotWon = jackpot > 0;
+      const net = back + jackpot - bet;
+      t.message = (cat ? hand.name + "! " : "") +
+        (jackpot ? `💰 JACKPOT +${fmt(jackpot)}! ` : "") +
+        (net > 0 ? `You won ${fmt(net)}!` : net < 0 ? `You lost ${fmt(-net)}.` : "Your bet back.") +
+        (cashback > 0 ? ` Cashback +${cashback.toLocaleString(undefined, { maximumFractionDigits: 1 })}.` : "") +
+        (levelsGained > 0 ? ` 🎉 Level up! Now level ${levelInfo(state.casinoXp).level}.` : "");
+      if (jackpot) showNotice(`💰 Video poker JACKPOT: +${fmt(jackpot)}!`);
+      t.phase = "betting"; t.busy = false;
+      updateCounter(); save();
+      renderVideoPoker();
+    }
+
+    function vpMsg(text) { if (vp) { vp.message = text; renderVideoPoker(); } }
+
+    function vpCardHtml(c, delay) {
+      const anim = c.fresh ? ` deal" style="animation-delay:${delay}ms` : "";
+      if (c.joker) return `<div class="pcard joker${anim}">🃏<small>JOKER</small></div>`;
+      const red = c.s === "♥" || c.s === "♦";
+      return `<div class="pcard ${red ? "redSuit" : ""}${anim}">
+                <span class="corner">${c.r}<br>${c.s}</span>${c.s}<span class="corner br">${c.r}<br>${c.s}</span></div>`;
+    }
+
+    function renderVideoPoker() {
+      const t = vp, bet = vpBet(t);
+      const betting = t.phase === "betting";
+      const shownBet = betting ? bet : state.vp[t.id].inPlay;
+      const share = vpJackpotShare(t, shownBet);
+      const nowCat = t.phase === "holding" && !t.busy ? vpScore(t.cards) : null;
+
+      // paytable, strongest first
+      const rows = VP_HANDS.map((h, i) => ({ h, i })).filter(x => x.i > 0).reverse().map(({ h, i }) => `
+        <tr class="${t.result === i ? "hit" : nowCat === i ? "now" : ""}">
+          <td>${h.name}</td><td>${h.pays}×</td><td>${fmt(shownBet * h.pays)}</td>
+          <td class="jp">${h.jackpot ? `+${fmt(Math.floor(share * h.jackpot))} (${h.jackpot * 100}% jackpot)` : ""}</td></tr>`).join("");
+
+      let slots = "";
+      for (let i = 0; i < 5; i++) {
+        const c = t.cards[i];
+        const canHold = t.phase === "holding" && !t.busy;
+        const inner = c ? vpCardHtml(c, 0) : `<div class="pcard back"></div>`;
+        slots += `<div class="vpSlot ${canHold ? "canHold" : ""} ${t.held[i] && c ? "held" : ""}" data-vphold="${i}">
+                    ${inner}<div class="holdTag">${t.held[i] && c ? "HELD" : ""}</div></div>`;
+      }
+
+      let actions;
+      if (betting) {
+        actions = `
+          <button class="btn" data-vp="deal" ${t.busy ? "disabled" : ""}>🎴 Deal (bet ${fmt(bet)})</button>
+          <button class="btn ghost" data-vp="max">Max bet (${fmt(t.max)})</button>
+          <button class="btn ghost" data-vp="min">Min bet</button>`;
+      } else {
+        actions = `<button class="btn" data-vp="draw" ${t.phase === "holding" && !t.busy ? "" : "disabled"}>🔄 Draw</button>
+          <span class="muted" style="align-self:center">Click the cards you want to keep, then draw.</span>`;
+      }
+
+      $("casinoGame").innerHTML = `
+        <div class="card">
+          <div class="row"><div><h2 style="margin:0">${t.emoji} ${t.title}</h2>
+            <div class="muted">Jacks or Better with 1 joker (53 cards) · Bets ${fmt(t.min)} – ${fmt(t.max)}</div></div>
+            <button class="btn ghost small" data-back="1" ${betting && !t.busy ? "" : "disabled"}>← All games</button></div>
+
+          <div class="vpJackpot ${t.jackpotWon ? "won" : ""}">
+            <div class="sub">💰 JACKPOT</div>
+            <div class="amt">${coins(t.jackpot)}</div>
+            <div class="sub">Royal Flush wins 100% · any Straight Flush wins 20% · paid on top of the normal win.
+              Your bet of ${fmt(shownBet)} wins ${pct(shownBet / t.max)} of it${shownBet < t.max ? " (bet the max to win all of it)" : ""}.</div>
+          </div>
+
+          <table class="vpPay"><tbody>${rows}</tbody></table>
+
+          <div class="bjFelt">
+            <div class="vpCards">${slots}</div>
+            <div class="vpHandName">${t.result !== null ? (t.result ? "🎉 " + VP_HANDS[t.result].name : "No win") : nowCat ? "You have: " + VP_HANDS[nowCat].name : ""}</div>
+          </div>
+
+          <div class="chipsRow">
+            <span class="muted">Bet:</span>
+            ${t.chips.map(v => `<button class="chip" data-vpchip="${v}" ${betting ? "" : "disabled"}
+                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
+            <button class="btn ghost small" data-vp="clear" ${betting ? "" : "disabled"}>Clear</button>
+            <span class="muted">Click chips to add to your bet (max ${fmt(t.max)}).</span>
+          </div>
+          <div class="bjActions">${actions}</div>
+          <div id="casinoMsg" class="${/won|back|JACKPOT/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
+          <div class="muted" style="margin-top:6px; text-align:center">The joker is wild and becomes the best card for your hand · "1×" means you get your bet back · Returns about 98% with perfect play</div>
+        </div>`;
+      t.cards.forEach(c => { if (c) c.fresh = false; });
+    }
+
+    $("casinoGame").addEventListener("click", (e) => {
+      if (!VP_TABLES[currentGame] || isPaused()) return;
+      const t = vp;
+      const slot = e.target.closest("[data-vphold]");
+      if (slot && t.phase === "holding" && !t.busy) {
+        const i = Number(slot.dataset.vphold);
+        t.held[i] = !t.held[i];
+        renderVideoPoker();
+        return;
+      }
+      const chip = e.target.closest("[data-vpchip]");
+      if (chip && t.phase === "betting" && !t.busy) {
+        const v = Number(chip.dataset.vpchip), cur = state.vp[t.id];
+        const start = cur.bet === t.min && t.lastWasDefault !== false ? 0 : cur.bet;   // first chip replaces the default min bet
+        cur.bet = Math.min(t.max, start + v);
+        t.lastWasDefault = false;
+        t.message = cur.bet === t.max && start + v > t.max ? "Table max is " + fmt(t.max) + "." : "";
+        renderVideoPoker(); save();
+        return;
+      }
+      const btn = e.target.closest("[data-vp]");
+      if (!btn || btn.disabled) return;
+      const a = btn.dataset.vp;
+      if (a === "deal" && !t.busy) vpDeal();
+      if (a === "draw" && t.phase === "holding" && !t.busy) vpDraw();
+      if (a === "max") { state.vp[t.id].bet = t.max; t.message = ""; renderVideoPoker(); save(); }
+      if (a === "min" || a === "clear") { state.vp[t.id].bet = t.min; t.lastWasDefault = true; t.message = ""; renderVideoPoker(); save(); }
     });
 
     /* =====================================================================

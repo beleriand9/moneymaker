@@ -151,12 +151,12 @@
       width: 190px; padding: 8px; border-radius: 8px; border: 1px solid #555566;
       background: #1c1d2b; color: #fff; font: inherit;
     }
-    #casinoDebt {
+    .debtBanner {
       display: block; width: 100%; margin-bottom: 14px; padding: 10px;
       background: #d62828; color: #fff; border: 2px solid #ff8a8a; border-radius: 10px;
       font: inherit; font-weight: 800; cursor: pointer; animation: pulse 1s ease-in-out infinite;
     }
-    #casinoDebt[hidden] { display: none; }
+    .debtBanner[hidden] { display: none; }
     #casinoLevel .levelNum {
       width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
@@ -828,7 +828,7 @@
 
   <!-- ===== Casino (filled in by JavaScript) ===== -->
   <section id="casinoView" hidden>
-    <button id="casinoDebt" hidden></button>
+    <button class="debtBanner" hidden></button>
     <div class="card row" id="casinoLevel" style="gap:16px; justify-content:flex-start">
       <div class="levelNum" id="levelNum">1</div>
       <div style="flex:1">
@@ -861,6 +861,7 @@
 
   <!-- ===== Logistics: oil tankers ===== -->
   <section id="logisticsView" hidden>
+    <button class="debtBanner" hidden></button>
     <div class="card wallet">
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="logiMoney">0</div></div>
       <div class="stat"><div class="label">🚛 Trucks</div><div class="value chips" id="truckCount">0 / 15</div></div>
@@ -888,6 +889,7 @@
 
   <!-- ===== Shop: cosmetics ===== -->
   <section id="shopView" hidden>
+    <button class="debtBanner" hidden></button>
     <div class="card wallet">
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="shopMoney">0</div></div>
     </div>
@@ -897,6 +899,7 @@
 
   <!-- ===== Investing ===== -->
   <section id="investView" hidden>
+    <button class="debtBanner" hidden></button>
     <div class="card row levelCard" id="investLevel">
       <div class="levelNum" id="investLevelNum">1</div>
       <div style="flex:1">
@@ -2003,11 +2006,11 @@
 
     function updateDebt() {
       const btn = $("debt");
-      const banner = $("casinoDebt");
-      if (state.taxDebts.length === 0) { btn.hidden = true; banner.hidden = true; return; }
+      const banners = document.querySelectorAll(".debtBanner");
+      if (state.taxDebts.length === 0) { btn.hidden = true; banners.forEach(b => b.hidden = true); return; }
       const soonest = Math.min(...state.taxDebts.map(d => d.timeLeft));
-      banner.hidden = false;
-      banner.textContent = `🧾 TAX DEBT: ${fmt(totalDebt())} · ${clock(soonest)} left · click to go pay it`;
+      const text = `🧾 TAX DEBT: ${fmt(totalDebt())} · ${clock(soonest)} left · click to go pay it`;
+      banners.forEach(b => { b.hidden = false; b.textContent = text; });
 
       // soonest deadline first
       const bills = [...state.taxDebts].sort((a, b) => a.timeLeft - b.timeLeft);
@@ -2119,7 +2122,7 @@
       const tab = e.target.closest(".tab");
       if (tab) showView(tab.dataset.view);
     });
-    $("casinoDebt").addEventListener("click", () => showView("income"));
+    document.querySelectorAll(".debtBanner").forEach(b => b.addEventListener("click", () => showView("income")));
 
     /* =====================================================================
        CASINO WALLET: move money in and out as chips

@@ -1136,7 +1136,28 @@
        HELPERS
        ===================================================================== */
     const $ = (id) => document.getElementById(id);
-    const fmt = (n) => Math.floor(n).toLocaleString();
+    // Plain whole number (used for XP and counts)
+    const fmtNum = (n) => Math.floor(n).toLocaleString();
+
+    // Money: shown in the biggest coin that fits.
+    //   under 1M          -> "950,000"        (bcoin)
+    //   1M  to 1M scoin   -> "3.4 scoin"      (1 scoin = 1,000,000 bcoin)
+    //   1M scoin and up   -> "10,956.92 gcoin" (1 gcoin = 1,000,000 scoin)
+    // Never rounds up, so it never shows more than you have.
+    const SCOIN = 1e6, GCOIN = 1e12;
+    function splitCoins(n) {
+      const a = Math.abs(n);
+      if (a < SCOIN) return [Math.floor(a).toLocaleString(), "bcoin"];
+      const unit = a < GCOIN ? SCOIN : GCOIN;
+      const v = Math.floor(a / unit * 100) / 100;
+      return [v.toLocaleString(undefined, { maximumFractionDigits: 2 }), unit === SCOIN ? "scoin" : "gcoin"];
+    }
+    const fmt = (n) => {
+      const [num, unit] = splitCoins(n);
+      return (n < 0 ? "−" : "") + num + (unit === "bcoin" ? "" : " " + unit);
+    };
+    // Money with its coin name always written out ("2,000 bcoin", "3.4 scoin")
+    const coins = (n) => { const [num, unit] = splitCoins(n); return (n < 0 ? "−" : "") + num + " " + unit; };
     const randomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
     const typeOf = (company) => BUSINESS_TYPES.find(t => t.id === company.typeId);
 
@@ -1576,7 +1597,10 @@
     }
 
     function updateCounter() {
-      $("counter").firstChild.nodeValue = fmt(state.money) + " ";
+      const [num, unit] = splitCoins(state.money);
+      $("counter").firstChild.nodeValue = num + " ";
+      $("counter").querySelector("span").textContent = unit;
+      $("counter").title = Math.floor(state.money).toLocaleString() + " bcoin";
       $("casinoMoney").textContent = fmt(state.money);
       $("casinoChips").textContent = fmt(state.casinoChips || 0);
       $("investMoney").textContent = fmt(state.money);
@@ -1630,7 +1654,7 @@
         // how much gold this mine holds: random 25M - 50M (rounded to 100k)
         const capacity = (250 + secureRandomInt(251)) * 100000;
         state.special.mines.push({ id: state.nextId++, capacity, mined: 0 });
-        showNotice("⛏️ Gold mine bought! It holds " + fmt(capacity) + " bcoins of gold.");
+        showNotice("⛏️ Gold mine bought! It holds " + coins(capacity) + " of gold.");
       }
       if (action === "buySpecial" && btn.dataset.special === "agency") {
         if (state.special.agency || state.money < AGENCY_PRICE || reProfit() < AGENCY_UNLOCK) return;
@@ -1858,7 +1882,7 @@
     let clickedThisSecond = 0;
 
     const flashUntil = {};   // keeps each company message on screen for 3 seconds
-    const signed = (n) => (n < 0 ? "" : "+") + n.toFixed(1);
+    const signed = (n) => Math.abs(n) >= SCOIN ? (n < 0 ? "" : "+") + fmt(n) : (n < 0 ? "" : "+") + n.toFixed(1);
 
     setInterval(() => {
       if (isPaused()) return;   // no income and no timers while a pop-up is open
@@ -2039,7 +2063,7 @@
       $("cashbackText").textContent = "Cashback " + pct(cashbackRate()) + " on lost bets";
       $("xpFill").style.width = info.max ? "100%" : (100 * info.into / info.need) + "%";
       $("xpText").textContent = info.max ? "Max level reached!"
-        : fmt(info.into) + " / " + fmt(info.need) + " XP to level " + (info.level + 1);
+        : fmtNum(info.into) + " / " + fmtNum(info.need) + " XP to level " + (info.level + 1);
     }
 
     // Adds XP and returns how many levels you gained
@@ -2493,7 +2517,7 @@
       $("etfFeeInline").textContent = pct(etfFee());
       $("investXpFill").style.width = info.max ? "100%" : (100 * info.into / info.need) + "%";
       $("investXpText").textContent = info.max ? "Max level reached!"
-        : fmt(info.into) + " / " + fmt(info.need) + " XP to level " + (info.level + 1);
+        : fmtNum(info.into) + " / " + fmtNum(info.need) + " XP to level " + (info.level + 1);
     }
 
     function addInvestXp(amount) {
@@ -3530,7 +3554,7 @@
       if (isPaused()) return;
       if (energyActive()) { showNotice("⚡ An energy drink is already working (" + state.energyLeft + "s left)."); return; }
       if (state.energyCooldown > 0) { showNotice("⏳ Energy drink cooldown: " + clock(state.energyCooldown) + " left."); return; }
-      if (state.money < ENERGY_PRICE) { showNotice("You need " + ENERGY_PRICE + " bcoins for an energy drink."); return; }
+      if (state.money < ENERGY_PRICE) { showNotice("You need " + coins(ENERGY_PRICE) + " for an energy drink."); return; }
       state.money -= ENERGY_PRICE;
       state.energyLeft = ENERGY_SECONDS;
       showNotice("⚡ Energy drink! Clicks are worth ×" + ENERGY_MULTIPLIER + " for " + state.energyLeft + " seconds.");
@@ -3541,7 +3565,7 @@
       if (isPaused()) return;
       if (influenceActive()) { showNotice("🎩 Your political influence is already working (" + state.influenceLeft + "s left)."); return; }
       if (state.influenceCooldown > 0) { showNotice("⏳ Political influence cooldown: " + clock(state.influenceCooldown) + " left."); return; }
-      if (state.money < INFLUENCE_PRICE) { showNotice("You need " + fmt(INFLUENCE_PRICE) + " bcoins for political influence."); return; }
+      if (state.money < INFLUENCE_PRICE) { showNotice("You need " + coins(INFLUENCE_PRICE) + " for political influence."); return; }
       state.money -= INFLUENCE_PRICE;
       state.influenceLeft = INFLUENCE_SECONDS;
       showNotice("🎩 Political influence bought! All businesses earn double for 2 minutes.");
@@ -3552,7 +3576,7 @@
       if (isPaused()) return;
       if (pillActive()) { showNotice("🧙 A magical pill is already working (" + state.pillLeft + "s left)."); return; }
       if (state.pillCooldown > 0) { showNotice("⏳ Magical pill cooldown: " + clock(state.pillCooldown) + " left."); return; }
-      if (state.money < PILL_PRICE) { showNotice("You need " + fmt(PILL_PRICE) + " bcoins for a magical pill."); return; }
+      if (state.money < PILL_PRICE) { showNotice("You need " + coins(PILL_PRICE) + " for a magical pill."); return; }
       state.money -= PILL_PRICE;
       state.pillLeft = PILL_SECONDS;
       showNotice("🧙 Magical pill! Each click gives +" + fmt(PILL_SHARE * Math.max(0, state.lastIncome || 0)) + " extra for 30 seconds.");
@@ -4300,7 +4324,7 @@
         const action = owned
           ? `<span class="muted">${on ? "On" : "Off"}</span>
              <button class="switch ${on ? "on" : ""}" data-cosmetic-toggle="${c.id}" aria-label="Turn ${c.name} ${on ? "off" : "on"}"></button>`
-          : `<span><b>${fmt(c.price)}</b> bcoin</span>
+          : `<span><b>${coins(c.price)}</b></span>
              <button class="btn" data-cosmetic-buy="${c.id}" data-cost="${c.price}" ${state.money < c.price ? "disabled" : ""}>Buy</button>`;
         return `<div class="cosmetic ${on ? "on" : ""}">${c.preview}
           <div class="info"><b>${c.name}</b><div class="muted">${c.desc}</div>

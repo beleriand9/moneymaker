@@ -53,6 +53,11 @@
     .sea .ship { position: absolute; top: 50%; transform: translate(-50%, -50%) scaleX(-1); font-size: 22px; transition: left 1s linear; }
     .sea.road { background: linear-gradient(180deg, #3a3a44 0 44%, #f5f5f5 44% 56%, #3a3a44 56% 100%); }
     .sea.road .wake { background: rgba(255, 211, 77, 0.18); }
+    .sea.sky { background: linear-gradient(180deg, #4fa3e0, #9fd3f7); }
+    .sea.sky .wake { background: repeating-linear-gradient(90deg, rgba(255,255,255,0.75) 0 10px, transparent 10px 16px); height: 3px; top: 50%; bottom: auto; }
+    .sea.sky .ship { transform: translate(-50%, -50%) rotate(45deg); }
+    .offer.express { border-color: #ffb300; background: rgba(255, 179, 0, 0.12); }
+    .offer .exp { color: #ffb300; font-weight: 900; font-size: 11px; }
     .sea .port { position: absolute; top: 50%; transform: translateY(-50%); font-size: 14px; }
     #shopView { max-width: 900px; margin: 0 auto; padding: 20px; }
     .cosmetics { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
@@ -942,6 +947,7 @@
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="logiMoney">0</div></div>
       <div class="stat"><div class="label">🚛 Trucks</div><div class="value chips" id="truckCount">0 / 15</div></div>
       <div class="stat"><div class="label">🚢 Tankers</div><div class="value chips" id="logiCount">0 / 10</div></div>
+      <div class="stat"><div class="label">✈️ Planes</div><div class="value chips" id="planeCount">0 / 5</div></div>
       <div class="stat"><div class="label">📦 Delivered (all time)</div><div class="value chips" id="logiEarned">0</div></div>
     </div>
     <div class="card">
@@ -968,6 +974,18 @@
         <br><br>🤖 <b>Logistics agent:</b> turn it on and it picks a random contract for any waiting tanker 5 seconds after the offers appear.
         It charges 2% of that contract's profit, taken from your money the moment it picks. It waits if you can't afford the fee.</div>
       <div id="tankers" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">✈️ Cargo planes</h2>
+        <button class="btn ghost small agentToggle" id="planeAgent" title="The agent picks a random contract 5 seconds after the offers appear. Fee: 2% of the contract, paid from your money.">🤖 Logistics agent: OFF</button>
+        <button class="btn ghost small" data-info="plane">ℹ️ Info</button></div>
+      <div class="muted infoBox" id="info-plane" hidden>Buy a <b>cargo plane</b> (250 scoin) for one of your 5 slots. Unlocks when you own 3 oil tankers.
+        Flights are short (2 – 8 minutes) and pay about <b>125 scoin per hour</b> while flying, so a plane earns back its price in about 2 hours
+        if you keep it busy. Each free plane gets 4 contract offers.
+        <br><br>⚡ <b>Express contracts:</b> sometimes one offer is an express job: 40% faster and 25% more per second, but it disappears
+        after 30 seconds if you don't take it.
+        <br><br>🤖 <b>Logistics agent:</b> picks a random contract 5 seconds after the offers appear, for 2% of that contract's profit.</div>
+      <div id="planes" style="margin-top:12px"></div>
     </div>
   </section>
 
@@ -5522,6 +5540,25 @@
           { from: "Mina Al Fahal 🇴🇲", to: "Melaka 🇲🇾",       min: 55, max: 65, rate: 8500, long: true },
         ],
       },
+      plane: {
+        label: "Plane", icon: "✈️", box: "planes", countEl: "planeCount", price: 250000000, slots: 5, sky: true,
+        names: ["Falcon", "Condor", "Albatross", "Pelican", "Osprey"],
+        emptyText: "Wide-body cargo plane",
+        unlock: { tankers: 3 },
+        // rate = 30,000 + 1,000 x average minutes  →  about 34,600 / sec on average (≈125 scoin / hour)
+        routes: [
+          { from: "Hong Kong 🇭🇰",  to: "Anchorage 🇺🇸",  min: 6, max: 7, rate: 36500 },
+          { from: "Leipzig 🇩🇪",    to: "Dubai 🇦🇪",      min: 4, max: 5, rate: 34500 },
+          { from: "Memphis 🇺🇸",    to: "Louisville 🇺🇸", min: 2, max: 3, rate: 32500 },
+          { from: "Liège 🇧🇪",      to: "Istanbul 🇹🇷",   min: 3, max: 4, rate: 33500 },
+          { from: "Shanghai 🇨🇳",   to: "Incheon 🇰🇷",    min: 2, max: 3, rate: 32500 },
+          { from: "Doha 🇶🇦",       to: "Frankfurt 🇩🇪",  min: 5, max: 6, rate: 35500 },
+          { from: "Singapore 🇸🇬",  to: "Tokyo 🇯🇵",      min: 5, max: 6, rate: 35500 },
+          { from: "Miami 🇺🇸",      to: "Bogotá 🇨🇴",     min: 3, max: 4, rate: 33500 },
+          { from: "Anchorage 🇺🇸",  to: "Chicago 🇺🇸",    min: 4, max: 5, rate: 34500 },
+          { from: "Amsterdam 🇳🇱",  to: "New York 🇺🇸",   min: 7, max: 8, rate: 37500, long: true },
+        ],
+      },
       truck: {
         label: "Truck", icon: "🚛", box: "trucks", countEl: "truckCount", price: 150000, slots: 15, road: true,
         names: Array.from({ length: 15 }, (_, i) => "Truck " + (i + 1)),
@@ -5544,7 +5581,23 @@
     if (!state.logistics) state.logistics = { tankers: [], earned: 0 };
     const logi = state.logistics;
     if (!logi.trucks) logi.trucks = [];
-    const fleetList = (key) => key === "tanker" ? logi.tankers : logi.trucks;
+    if (!logi.planes) logi.planes = [];
+    const fleetList = (key) => key === "tanker" ? logi.tankers : key === "plane" ? logi.planes : logi.trucks;
+    const fleetUnlocked = (key) => !FLEETS[key].unlock || (logi.tankers.length >= FLEETS[key].unlock.tankers);
+
+    // ⚡ Express (planes only): 40% chance that one of the 4 offers is express:
+    // 40% shorter, 25% more per second, and it disappears after 30 seconds.
+    const EXPRESS_CHANCE = 40, EXPRESS_SECONDS = 30, EXPRESS_TIME = 0.6, EXPRESS_RATE = 1.25;
+    function makeExpress(o) {
+      const seconds = Math.max(60, Math.round(o.seconds * EXPRESS_TIME));
+      return { ...o, seconds, profit: Math.round(o.profit / o.seconds * EXPRESS_RATE * seconds), express: EXPRESS_SECONDS };
+    }
+    function planeOffers() {
+      const offers = makeContracts("plane");
+      if (secureRandomInt(100) < EXPRESS_CHANCE) { const k = secureRandomInt(4); offers[k] = makeExpress(offers[k]); }
+      return offers;
+    }
+    const newOffers = (key) => key === "plane" ? planeOffers() : makeContracts(key);
 
     // Truck breakdowns
     const TRUCK_BREAKDOWN_CHANCE = 100, TRUCK_REPAIR_MIN = 500, TRUCK_REPAIR_MAX = 5000;
@@ -5574,7 +5627,7 @@
           continue;
         }
         state.money -= fee;
-        v.contract = { ...o, left: o.seconds };
+        v.contract = { route: o.route, seconds: o.seconds, profit: o.profit, left: o.seconds };
         v.offers = null; v.wait = 0;
         const r = FLEETS[key].routes[o.route];
         showNotice(`🤖 Agent sent ${v.name} to ${r.to.replace(/ \S+$/, "")} (fee ${fmt(fee)})`);
@@ -5583,13 +5636,13 @@
       return picked;
     }
     function updateAgentButton() {
-      for (const key of ["truck", "tanker"]) {
+      for (const key of ["truck", "tanker", "plane"]) {
         const b = $(key + "Agent");
         b.textContent = "🤖 Logistics agent: " + (agentOn(key) ? "ON" : "OFF");
         b.classList.toggle("on", agentOn(key));
       }
     }
-    for (const key of ["truck", "tanker"]) {
+    for (const key of ["truck", "tanker", "plane"]) {
       $(key + "Agent").addEventListener("click", () => {
         logi[key + "Agent"] = !agentOn(key);
         fleetList(key).forEach(v => { v.wait = 0; });   // everyone waiting gets a fresh 5 seconds
@@ -5639,10 +5692,27 @@
               v.offers = null;
               showAlert(`🔧 ${v.name} broke down!`, `It needs repairs before it can take new contracts. Repair cost: <b style="display:inline">${fmt(v.broken.cost)}</b> (🚢 Logistics).`);
             } else {
-              v.offers = makeContracts(key);
+              v.offers = newOffers(key);
             }
           } else {
             updateVehicleLive(v);
+          }
+        }
+        if (key === "plane") {
+          for (const v of fleetList(key)) {
+            if (v.contract || !v.offers) continue;
+            v.offers.forEach((o, k) => {
+              if (!o.express) return;
+              o.express--;
+              if (o.express <= 0) {   // express offer expired: replace it with a normal one on a different route
+                const used = v.offers.map(x => x.route);
+                const fresh = makeContracts("plane").find(x => !used.includes(x.route)) || makeContracts("plane")[0];
+                v.offers[k] = fresh; arrived = true;
+              } else {
+                const el = $(`exp-${v.id}-${k}`);
+                if (el) el.textContent = `⚡ EXPRESS · ${o.express}s left`;
+              }
+            });
           }
         }
         if (agentTick(key)) { arrived = true; updateCounter(); }
@@ -5679,8 +5749,8 @@
           html += `<div class="tanker sailing">
             <div class="row"><b>${F.icon} ${v.name}</b><span class="income">+${fmt(contractPayout(key, c.profit))} on arrival</span></div>
             <div class="muted">${r.from} → ${r.to}</div>
-            <div class="sea ${F.road ? "road" : ""}"><div class="wake" id="wake-${v.id}" style="width:${6 + done * 88}%"></div>
-              <span class="port" style="left:6px">${F.road ? "🏭" : "⚓"}</span><span class="port" style="right:6px">🏁</span>
+            <div class="sea ${F.road ? "road" : F.sky ? "sky" : ""}"><div class="wake" id="wake-${v.id}" style="width:${6 + done * 88}%"></div>
+              <span class="port" style="left:6px">${F.road ? "🏭" : F.sky ? "🛫" : "⚓"}</span><span class="port" style="right:6px">🏁</span>
               <span class="ship" id="ship-${v.id}" style="left:${6 + done * 88}%">${F.icon}</span></div>
             <div class="row muted"><span>Transit ${clockLong(c.seconds)}</span><span id="left-${v.id}">${clockLong(c.left)} left</span></div>
           </div>`;
@@ -5694,10 +5764,11 @@
           </div>`;
         } else {
           html += `<div class="tanker">
-            <div class="row"><b>${F.icon} ${v.name}</b><span class="muted">${F.road ? "at the depot" : "in port"} · choose a contract</span></div>
+            <div class="row"><b>${F.icon} ${v.name}</b><span class="muted">${F.road ? "at the depot" : F.sky ? "at the airport" : "in port"} · choose a contract</span></div>
             <div class="offers">${v.offers.map((o, k) => {
               const r = F.routes[o.route];
-              return `<button class="offer" data-fleet="${key}" data-vehicle="${v.id}" data-offer="${k}">
+              return `<button class="offer ${o.express ? "express" : ""}" data-fleet="${key}" data-vehicle="${v.id}" data-offer="${k}">
+                ${o.express ? `<span class="exp" id="exp-${v.id}-${k}">⚡ EXPRESS · ${o.express}s left</span>` : ""}
                 <b class="route">${r.from} → ${r.to}</b>
                 💰 Total profit: <b>${fmt(contractPayout(key, o.profit))}</b>${contractBonus(key) ? ` <span class="long">+${+(contractBonus(key) * 100).toFixed(1)}%</span>` : ""}<br>
                 ⏱️ Transit time: <b>${clockLong(o.seconds)}</b><br>
@@ -5708,7 +5779,13 @@
           </div>`;
         }
       });
-      if (list.length < F.slots) {
+      if (list.length < F.slots && !fleetUnlocked(key)) {
+        html += `<div class="tanker emptySlot" style="opacity:0.7">
+          <div style="font-size:28px">🔒 ${F.icon}</div>
+          <b>Locked</b><div class="muted" style="margin:4px 0 10px">Unlocks when you own ${F.unlock.tankers} oil tankers (you have ${logi.tankers.length})</div>
+          <span class="muted">${coins(F.price)} each</span>
+        </div>`;
+      } else if (list.length < F.slots) {
         html += `<div class="tanker emptySlot">
           <div style="font-size:28px">${F.icon}</div>
           <b>Empty slot</b><div class="muted" style="margin:4px 0 10px">${F.emptyText}</div>
@@ -5717,19 +5794,19 @@
       }
       $(F.box).innerHTML = html + `</div>`;
     }
-    function renderTankers() { renderFleet("tanker"); renderFleet("truck"); }
+    function renderTankers() { renderFleet("tanker"); renderFleet("truck"); renderFleet("plane"); }
 
     function fleetClick(e) {
       if (isPaused()) return;
       const buy = e.target.closest("[data-buy-fleet]");
       if (buy) {
         const key = buy.dataset.buyFleet, F = FLEETS[key], list = fleetList(key);
-        if (list.length >= F.slots || state.money < F.price) return;
+        if (list.length >= F.slots || state.money < F.price || !fleetUnlocked(key)) return;
         state.money -= F.price;
-        const v = { id: state.nextId++, name: F.names[list.length % F.names.length], contract: null, offers: makeContracts(key), wait: 0 };
+        const v = { id: state.nextId++, name: F.names[list.length % F.names.length], contract: null, offers: newOffers(key), wait: 0 };
         list.push(v);
         showNotice(`${F.icon} Bought ${v.name}! Choose its first contract.`);
-        updateCounter(); renderFleet(key); render(); save();
+        updateCounter(); renderFleet(key); if (key === "tanker") renderFleet("plane"); render(); save();
         return;
       }
       const repair = e.target.closest("[data-repair]");
@@ -5750,13 +5827,14 @@
         const v = fleetList(key).find(x => x.id === Number(offer.dataset.vehicle));
         if (!v || v.contract) return;
         const o = v.offers[Number(offer.dataset.offer)];
-        v.contract = { ...o, left: o.seconds };
+        v.contract = { route: o.route, seconds: o.seconds, profit: o.profit, left: o.seconds };
         v.offers = null; v.wait = 0;
         renderFleet(key); save();
       }
     }
     $("tankers").addEventListener("click", fleetClick);
     $("trucks").addEventListener("click", fleetClick);
+    $("planes").addEventListener("click", fleetClick);
 
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;

@@ -545,6 +545,12 @@
     .choice small { color: #b5b5c8; }
 
     .staff { font-size: 14px; margin: 4px 0; }
+    .specialHead { margin: 22px 0 12px; }
+    .specialCard { border-color: rgba(127, 209, 255, 0.4); background: rgba(127, 209, 255, 0.06); }
+    .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin-top: 8px; }
+    .agent { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    .agent b { color: #9fe39f; }
+    .agent.zero b { color: #9a9ab0; }
     .groupHead { background: rgba(255, 211, 77, 0.07); border-color: rgba(255, 211, 77, 0.35); padding: 10px 14px; }
 
     .worker {
@@ -1502,6 +1508,7 @@
       });
 
       html += `<div class="muted">More businesses coming soon...</div>`;
+      html += renderSpecialBusinesses();
       $("shop").innerHTML = html;
       updateAffordability();
     }
@@ -1542,6 +1549,13 @@
         state.companies.push({ typeId: t.id, accountant: null, hr: null, workers: [], candidates: null });
       }
       if (action === "toggle") company.collapsed = !company.collapsed;
+      if (action === "buySpecial" && btn.dataset.special === "agency") {
+        if (state.special.agency || state.money < AGENCY_PRICE || reProfit() < AGENCY_UNLOCK) return;
+        state.money -= AGENCY_PRICE;
+        state.special.agency = { agents: [], best: 0 };
+        agencyHireAgents();
+        showNotice("🏢 Real estate agency opened!");
+      }
       if (action === "toggleGroup") {
         state.groupCollapsed = state.groupCollapsed || {};
         state.groupCollapsed[btn.dataset.type] = !state.groupCollapsed[btn.dataset.type];
@@ -1799,6 +1813,10 @@
         const el = $("g-income-" + typeId);
         if (el) el.textContent = signed(groupIncome[typeId]) + " / sec";
       }
+
+      // Special businesses
+      const agencyIncome = agencyTick();
+      perSecond += agencyIncome;
 
       state.money = Math.max(0, state.money + perSecond);
 
@@ -2456,7 +2474,13 @@
       state.money += p.value;
       investRecord("re", 0, p.value);
       inv.properties = inv.properties.filter(x => x !== p);
-      investMessage("Sold a property for " + fmt(p.value) + ".", true);
+      let bonusText = "";
+      if (state.special && state.special.agency) {
+        const bonus = p.value * AGENCY_SALE_BONUS;
+        state.money += bonus;
+        bonusText = ` 🏢 Agency bonus +${fmt(bonus)}.`;
+      }
+      investMessage("Sold a property for " + fmt(p.value) + "." + bonusText, true);
       renderProperties(); updateCounter(); updateInvestLive(); save();
     });
 
@@ -3631,6 +3655,100 @@
       if (a === "clear") { climb.bet = 0; renderClimb(); }
       if (a === "rebet") { climb.bet = climb.lastBet; renderClimb(); }
     });
+
+    /* =====================================================================
+       SPECIAL BUSINESSES
+       🏢 Real estate agency: needs 100k all-time real estate profit, costs 1M, only one.
+       - Selling a property gives +2% of its value.
+       - No workers / HR / accountant. Instead: real estate agents, each earning 0, 5, 10 or 15 per second.
+         One agent for every 100k of all-time real estate profit.
+       ===================================================================== */
+    const AGENCY_PRICE = 1000000;
+    const AGENCY_UNLOCK = 100000;
+    const AGENCY_SALE_BONUS = 0.02;
+    const AGENCY_PER_AGENT = 100000;
+    const AGENT_RATES = [0, 5, 10, 15];
+    if (!state.special) state.special = { agency: null };
+    let agencyWasUnlocked = null;
+
+    // all-time real estate profit (same number as in the Investing tab)
+    function reProfit() {
+      const st = state.invest && state.invest.stats && state.invest.stats.re;
+      if (!st) return 0;
+      return st.out + state.invest.properties.reduce((a, p) => a + p.value, 0) - st.in;
+    }
+
+    // Add agents until there is one for every 100k of real estate profit (agents are never taken away)
+    function agencyHireAgents() {
+      const ag = state.special.agency;
+      if (!ag) return 0;
+      const target = Math.floor(Math.max(0, reProfit()) / AGENCY_PER_AGENT);
+      let added = 0;
+      while (ag.agents.length < target) {
+        ag.agents.push(AGENT_RATES[secureRandomInt(AGENT_RATES.length)]);
+        added++;
+      }
+      return added;
+    }
+
+    // Runs every second: returns the agency's income (doubled by political influence like other businesses)
+    function agencyTick() {
+      const ag = state.special.agency;
+      if (!ag) {
+        // redraw the shop the moment the agency unlocks
+        const unlocked = reProfit() >= AGENCY_UNLOCK;
+        if (unlocked !== agencyWasUnlocked) { agencyWasUnlocked = unlocked; render(); }
+        return 0;
+      }
+      const added = agencyHireAgents();
+      if (added > 0) {
+        const last = ag.agents[ag.agents.length - 1];
+        showNotice(`🏢 New real estate agent${added > 1 ? "s" : ""} joined! ${added > 1 ? added + " agents" : "Earns " + last + " / sec"}.`);
+        render();
+      }
+      let income = ag.agents.reduce((a, b) => a + b, 0);
+      if (state.influenceLeft > 0) income *= 2;
+      const el = $("agency-income");
+      if (el) el.textContent = "+" + income.toFixed(1) + " / sec";
+      return income;
+    }
+
+    function renderSpecialBusinesses() {
+      const ag = state.special.agency;
+      const profit = reProfit();
+      let html = `<h2 class="specialHead">⭐ Special businesses</h2>`;
+
+      if (ag) {
+        const income = ag.agents.reduce((a, b) => a + b, 0);
+        const next = (ag.agents.length + 1) * AGENCY_PER_AGENT;
+        html += `<div class="card specialCard">
+          <div class="row"><h3>🏢 Real Estate Agency</h3><span class="income" id="agency-income">+${income.toFixed(1)} / sec</span></div>
+          <div class="muted">+2% bonus every time you sell a property · one new agent for every 100k of real estate profit</div>
+          <div class="muted" style="margin-top:4px">Next agent at ${fmt(next)} real estate profit (now ${profit >= 0 ? "" : "−"}${fmt(Math.abs(profit))})</div>
+          <h4>Agents (${ag.agents.length})</h4>
+          ${ag.agents.length ? `<div class="agents">${ag.agents.map((r, i) =>
+            `<div class="agent ${r === 0 ? "zero" : ""}">🧑‍💼 Agent ${i + 1}<br><b>${r} / sec</b></div>`).join("")}</div>`
+            : `<div class="muted">No agents yet.</div>`}
+        </div>`;
+      } else if (profit >= AGENCY_UNLOCK) {
+        html += `<div class="card specialCard"><div class="row">
+          <div><h3>🏢 Real Estate Agency</h3>
+            <div class="muted">+2% when you sell real estate · real estate agents earn 0, 5, 10 or 15 / sec each</div>
+            <div class="muted">One agent for every 100k of real estate profit (you'd start with ${Math.floor(profit / AGENCY_PER_AGENT)})</div>
+            <div class="muted">Owned: 0 / 1</div></div>
+          <button class="btn" data-action="buySpecial" data-special="agency" data-cost="${AGENCY_PRICE}">Buy ${fmt(AGENCY_PRICE)}</button>
+        </div></div>`;
+      } else {
+        html += `<div class="card specialCard" style="opacity:0.6"><div class="row">
+          <div><h3>🔒 🏢 Real Estate Agency</h3>
+            <div class="muted">+2% when you sell real estate · real estate agents earn 0, 5, 10 or 15 / sec each</div>
+            <div class="muted">Unlocks at 100,000 all-time real estate profit (now ${profit >= 0 ? "" : "−"}${fmt(Math.abs(profit))}, see 📈 Investing)</div>
+            <div class="muted">Owned: 0 / 1</div></div>
+          <span class="muted">${fmt(AGENCY_PRICE)}</span>
+        </div></div>`;
+      }
+      return html;
+    }
 
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;

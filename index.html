@@ -278,6 +278,18 @@
     }
     .pcard.deal { animation: dealIn 0.35s ease-out; }
     @keyframes dealIn { from { opacity: 0; transform: translate(0, -60px) rotate(-8deg) scale(0.8); } to { opacity: 1; transform: none; } }
+    /* Red alert pop-ups (top right, don't pause the game) */
+    #alerts { position: fixed; top: 70px; right: 16px; z-index: 60; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
+    .alertPop {
+      background: #b71c1c; color: #fff; border: 2px solid #ff8a8a; border-radius: 12px; padding: 12px 14px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5); cursor: pointer; animation: alertIn 0.3s ease-out;
+    }
+    .alertPop b { display: block; font-size: 16px; margin-bottom: 2px; }
+    .alertPop small { opacity: 0.8; }
+    @keyframes alertIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+    /* Broken-down truck */
+    .tanker.broken { background: rgba(198, 40, 40, 0.22); border-color: #ff5252; box-shadow: 0 0 12px rgba(255, 82, 82, 0.35); }
+    .tanker.broken .brokeIcon { font-size: 34px; text-align: center; margin: 6px 0; }
     /* Ultimate Texas Hold'em */
     .uthRow { text-align: center; }
     .uthRow .pcard, .uthSeat .pcard { width: 54px; height: 76px; font-size: 24px; }
@@ -939,6 +951,8 @@
       <div class="muted infoBox" id="info-truck" hidden>Buy a semi-truck (150,000) for one of your 15 slots. Each free truck gets
         <b>4 contract offers</b> across Europe: pick one and it drives. When it arrives, the whole contract is paid to your money.
         Longer routes pay more per second. A truck earns back its price in about 1.5 hours. Trips only move while the game is open.
+        <br><br>🔧 <b>Breakdowns:</b> after each delivery there is a 1 in 100 chance the truck breaks down. It can't take new contracts
+        until you pay for repairs (500 – 5,000).
         <br><br>🤖 <b>Logistics agent:</b> turn it on and it picks a random contract for any waiting truck 5 seconds after the offers appear.
         It charges 2% of that contract's profit, taken from your money the moment it picks. It waits if you can't afford the fee.</div>
       <div id="trucks" style="margin-top:12px"></div>
@@ -1101,6 +1115,7 @@
 
   <!-- ===== Pop-up window (tax payment / game over) ===== -->
   <div id="modal" hidden><div id="modalBox"></div></div>
+  <div id="alerts"></div>
 
   <script>
     /* =====================================================================
@@ -2022,6 +2037,16 @@
         showGameOver(d);
         return;
       }
+    }
+
+    /* ----- Red alert pop-up: shows for 8 seconds, click to close ----- */
+    function showAlert(title, text) {
+      const el = document.createElement("div");
+      el.className = "alertPop";
+      el.innerHTML = `<b>${title}</b>${text}<br><small>Click to close</small>`;
+      el.addEventListener("click", () => el.remove());
+      $("alerts").appendChild(el);
+      setTimeout(() => el.remove(), 8000);
     }
 
     /* ----- Pop-up window ----- */
@@ -5521,6 +5546,9 @@
     if (!logi.trucks) logi.trucks = [];
     const fleetList = (key) => key === "tanker" ? logi.tankers : logi.trucks;
 
+    // Truck breakdowns
+    const TRUCK_BREAKDOWN_CHANCE = 100, TRUCK_REPAIR_MIN = 500, TRUCK_REPAIR_MAX = 5000;
+
     // Logistics agent (one switch for trucks, one for tankers): picks a random contract after 5 s for a 2% fee
     const AGENT_DELAY = 5, AGENT_FEE = 0.02;
     if (logi.truckAgent === undefined) logi.truckAgent = false;
@@ -5603,9 +5631,16 @@
             const r = F.routes[v.contract.route];
             showNotice(`${F.icon} ${v.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(pay)}!`);
             v.contract = null;
-            v.offers = makeContracts(key);
             v.wait = 0;
             arrived = true;
+            // Trucks: 1 in 100 chance to break down after a delivery. Repair costs 500 – 5,000.
+            if (key === "truck" && secureRandomInt(TRUCK_BREAKDOWN_CHANCE) === 0) {
+              v.broken = { cost: TRUCK_REPAIR_MIN + secureRandomInt(TRUCK_REPAIR_MAX - TRUCK_REPAIR_MIN + 1) };
+              v.offers = null;
+              showAlert(`🔧 ${v.name} broke down!`, `It needs repairs before it can take new contracts. Repair cost: <b style="display:inline">${fmt(v.broken.cost)}</b> (🚢 Logistics).`);
+            } else {
+              v.offers = makeContracts(key);
+            }
           } else {
             updateVehicleLive(v);
           }
@@ -5615,6 +5650,11 @@
       }
       if (paid > 0) state.money += paid;
       $("logiEarned").textContent = fmt(logi.earned);
+      // repair buttons light up as soon as you can afford them
+      document.querySelectorAll("[data-repair]").forEach(b => {
+        const v = logi.trucks.find(x => x.id === Number(b.dataset.repair));
+        if (v && v.broken) b.disabled = state.money < v.broken.cost;
+      });
       return paid;
     }
 
@@ -5643,6 +5683,14 @@
               <span class="port" style="left:6px">${F.road ? "🏭" : "⚓"}</span><span class="port" style="right:6px">🏁</span>
               <span class="ship" id="ship-${v.id}" style="left:${6 + done * 88}%">${F.icon}</span></div>
             <div class="row muted"><span>Transit ${clockLong(c.seconds)}</span><span id="left-${v.id}">${clockLong(c.left)} left</span></div>
+          </div>`;
+        } else if (v.broken) {
+          html += `<div class="tanker broken">
+            <div class="row"><b>${F.icon} ${v.name}</b><span style="color:#ff8a8a; font-weight:800">BROKEN DOWN</span></div>
+            <div class="brokeIcon">🔧🚛💥</div>
+            <div class="muted" style="text-align:center">This truck needs repairs before it can take new contracts.</div>
+            <div style="text-align:center; margin-top:10px">
+              <button class="btn" data-repair="${v.id}" ${state.money < v.broken.cost ? "disabled" : ""}>🔧 Repair for ${fmt(v.broken.cost)}</button></div>
           </div>`;
         } else {
           html += `<div class="tanker">
@@ -5682,6 +5730,18 @@
         list.push(v);
         showNotice(`${F.icon} Bought ${v.name}! Choose its first contract.`);
         updateCounter(); renderFleet(key); render(); save();
+        return;
+      }
+      const repair = e.target.closest("[data-repair]");
+      if (repair) {
+        const v = logi.trucks.find(x => x.id === Number(repair.dataset.repair));
+        if (!v || !v.broken || state.money < v.broken.cost) return;
+        state.money -= v.broken.cost;
+        showNotice(`🔧 ${v.name} repaired for ${fmt(v.broken.cost)}. It's ready for contracts.`);
+        v.broken = null;
+        v.offers = makeContracts("truck");
+        v.wait = 0;
+        updateCounter(); renderFleet("truck"); save();
         return;
       }
       const offer = e.target.closest("[data-offer]");

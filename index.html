@@ -3764,6 +3764,7 @@
     const AGENCY_SALE_BONUS = 0.02;
     const AGENCY_PER_AGENT = 100000;
     const AGENT_RATES = [0, 5, 10, 15];
+    const AGENCY_MAX_AGENTS = 100;     // safety cap: without it, huge real estate profits created thousands of agents and crashed the page
     if (!state.special) state.special = { agency: null };
     let agencyWasUnlocked = null;
 
@@ -3778,7 +3779,8 @@
     function agencyHireAgents() {
       const ag = state.special.agency;
       if (!ag) return 0;
-      const target = Math.floor(Math.max(0, reProfit()) / AGENCY_PER_AGENT);
+      const target = Math.min(AGENCY_MAX_AGENTS, Math.floor(Math.max(0, reProfit()) / AGENCY_PER_AGENT));
+      if (ag.agents.length > AGENCY_MAX_AGENTS) ag.agents.length = AGENCY_MAX_AGENTS;   // fix saves from before the cap
       let added = 0;
       while (ag.agents.length < target) {
         ag.agents.push(0);           // the number is what the agent earned in the last second
@@ -4010,11 +4012,13 @@
       if (ag) {
         const income = ag.agents.reduce((a, b) => a + b, 0);
         const next = (ag.agents.length + 1) * AGENCY_PER_AGENT;
+        const full = ag.agents.length >= AGENCY_MAX_AGENTS;
         html += `<div class="card specialCard">
           <div class="row"><h3>🏢 Real Estate Agency</h3><span class="income" id="agency-income">+${income.toFixed(1)} / sec</span></div>
           <div class="muted">+2% bonus every time you sell a property · one new agent for every 100k of real estate profit · each agent earns 0, 5, 10 or 15 at random every second (7.5 / sec on average)</div>
-          <div class="muted" style="margin-top:4px">Next agent at ${fmt(next)} real estate profit (now ${profit >= 0 ? "" : "−"}${fmt(Math.abs(profit))})</div>
-          <h4>Agents (${ag.agents.length})</h4>
+          <div class="muted" style="margin-top:4px">${full ? "Your agency is full (max " + AGENCY_MAX_AGENTS + " agents)." :
+            `Next agent at ${fmt(next)} real estate profit (now ${profit >= 0 ? "" : "−"}${fmt(Math.abs(profit))})`}</div>
+          <h4>Agents (${ag.agents.length} / ${AGENCY_MAX_AGENTS})</h4>
           ${ag.agents.length ? `<div class="agents">${ag.agents.map((r, i) =>
             `<div class="agent ${r === 0 ? "zero" : ""}">🧑‍💼 Agent ${i + 1}<br><b id="agent-${i}">${r} / sec</b></div>`).join("")}</div>`
             : `<div class="muted">No agents yet.</div>`}

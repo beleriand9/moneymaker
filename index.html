@@ -2812,6 +2812,7 @@
         const keys = Object.keys(table.bets);
         if (keys.some(k => /^n\d+$/.test(k) && Number(k.slice(1)) === result)) state.stats.rouletteNumber = true;
         if (result === 0 && keys.length === 1 && keys[0] === "n0") state.stats.rouletteZeroOnly = true;
+        countPlay("roulette");
         if ((table.bets.red || 0) >= 500000000 || (table.bets.black || 0) >= 500000000) state.stats.redBlack500 = true;
         const levelsGained = addXp(bet);      // 1 XP per bcoin bet
         setBets(table, {});
@@ -3530,6 +3531,7 @@
       t.hands = [];
       bets.forEach((b, seat) => { if (b > 0) t.hands.push({ seat, bet: b, cards: [], done: false, result: null }); });
       if (bets.some(b => b >= 500000000)) state.stats.bj500 = true;
+      countPlay("blackjack");
       state.bj[t.id].bets = [0, 0, 0];
       t.dealer = [];
       save();
@@ -3974,6 +3976,7 @@
       state.casinoChips -= bet;
       state.vp[t.id].inPlay = bet;
       if (bet >= 500000000) state.stats.vp500 = true;
+      countPlay("vp");
       state.vp[t.id].lastBet = bet;
       t.deck = vpDeck();
       t.cards = [];
@@ -4008,6 +4011,7 @@
       t.jackpotWon = jackpot > 0;
       if (jackpot > 0) state.stats.vpJackpot = true;
       if (cat === 11) state.stats.royal = true;
+      if (cat === 7) state.stats.quads = (state.stats.quads || 0) + 1;
       const net = back + jackpot - bet;
       t.message = (cat ? hand.name + "! " : "") +
         (jackpot ? `💰 JACKPOT +${fmt(jackpot)}! ` : "") +
@@ -4018,6 +4022,12 @@
       t.phase = "betting"; t.busy = false;
       updateCounter(); save();
       renderVideoPoker();
+    }
+
+    // Counts games played per casino game (for achievements)
+    function countPlay(game, n = 1) {
+      if (!state.stats.played) state.stats.played = {};
+      state.stats.played[game] = (state.stats.played[game] || 0) + n;
     }
 
     function vpMsg(text) { if (vp) { vp.message = text; renderVideoPoker(); } }
@@ -4227,6 +4237,7 @@
       t.busy = true; t.phase = "dealing"; t.message = "";
       t.lastBets = seats.map(s => ({ ...s }));
       state.uth[t.id].inPlay = uthCost(seats);
+      countPlay("uth");
       t.hands = [];
       seats.forEach((s, seat) => {
         if (s.ante > 0) t.hands.push({ seat, ante: s.ante, blind: s.ante, trips: s.trips, play: 0, cards: [], folded: false, decided: false });
@@ -4298,6 +4309,7 @@
       for (const h of t.hands) {
         const pScore = pkBest([...h.cards, ...t.board]), cat = pkCat(pScore);
         if (cat === 9) state.stats.royal = true;
+        if (cat === 7) state.stats.quads = (state.stats.quads || 0) + 1;
         h.handName = PK_NAMES[cat];
         const bet = h.ante + h.blind + h.play + h.trips;
         let ret = 0;
@@ -4306,6 +4318,8 @@
           h.outcome = "Folded"; h.spots.ante = h.spots.blind = "lose";
         } else if (pScore > dScore) {
           h.outcome = "Win";
+          const ranks = h.cards.map(c => c.r).sort().join("");
+          if (ranks === "67") state.stats.sixSeven = true;   // won holding a 6 and a 7
           ret += h.play * 2;                                        h.spots.play = "win";
           if (qualifies) { ret += h.ante * 2; h.spots.ante = "win"; } else { ret += h.ante; h.spots.ante = "push"; }
           if (UTH_BLIND_PAYS[cat]) { ret += h.blind * (1 + UTH_BLIND_PAYS[cat]); h.spots.blind = "win"; } else { ret += h.blind; h.spots.blind = "push"; }
@@ -4647,6 +4661,7 @@
       if (climb.bet > state.casinoChips) return climbMsg("Not enough chips. Add money to the casino first.");
       state.casinoChips -= climb.bet;
       casinoRecord(climb.bet, 0);
+      countPlay("climb");
       Object.assign(climb, { active: true, stake: climb.bet, step: 0, shield: false, balls: climbMachine(),
                              drawn: [], tookHalf: false, banked: 0, message: "", crashed: false, lastBet: climb.bet });
       state.climbInPlay = climb.stake;
@@ -5311,6 +5326,7 @@
       state.casinoChips -= total;
       state.plinkoInPlay += total;
       casinoRecord(total, 0);
+      countPlay("plinko", n);                          // every ball is one game
       addXp(total);                                   // 1 XP per bcoin bet
       if (plinko.balls.length === 0) { plinko.roundBet = 0; plinko.roundWin = 0; }
       plinko.roundBet += total;
@@ -5937,7 +5953,9 @@
       { id: "glevel25",   cat: "casino", icon: "👑", name: "Whale",              desc: "Reach Gambler level 25",              goal: 25, get: () => levelInfo(state.casinoXp).level },
       { id: "casinoUp",   cat: "casino", icon: "🤑", name: "Beat the house",     desc: "Be 1 scoin up in the casino (all-time earnings)", goal: SC, get: () => state.casinoStats.returned - state.casinoStats.wagered, money: true },
       { id: "royal",      cat: "casino", icon: "♠️", name: "Royal Flush!",       desc: "Get a Royal Flush in Video Poker or Ultimate Texas Hold'em", goal: 1, get: flag("royal") },
-      { id: "jackpot",    cat: "casino", icon: "💰", name: "Jackpot!",           desc: "Win a Video Poker jackpot",           goal: 1, get: flag("vpJackpot") },
+      { id: "bigWin",     cat: "casino", icon: "💰", name: "Jackpot!",           desc: "Win a Video Poker jackpot or reach the top of Sky Climb", goal: 1, get: () => (state.stats.vpJackpot || state.stats.climbTop ? 1 : 0) },
+      { id: "quads4",     cat: "casino", icon: "🀄", name: "Four of a kind ×4",  desc: "Get 4 four-of-a-kinds in total (Video Poker and Ultimate Texas Hold'em)", goal: 4, get: () => state.stats.quads || 0 },
+      { id: "sixSeven",   cat: "casino", icon: "🤷", name: "6 7",                desc: "Win an Ultimate Texas Hold'em hand holding a 6 and a 7", goal: 1, get: flag("sixSeven") },
       { id: "bj100",      cat: "casino", icon: "🃏", name: "Card counter",       desc: "Win 100 Blackjack hands",             goal: 100,  get: () => state.stats.bjWins || 0 },
       { id: "bj1000",     cat: "casino", icon: "🂡", name: "Blackjack legend",   desc: "Win 1,000 Blackjack hands",           goal: 1000, get: () => state.stats.bjWins || 0 },
       { id: "rouNumber",  cat: "casino", icon: "🎯", name: "Called it",          desc: "Win a bet on a single number in Roulette", goal: 1, get: flag("rouletteNumber") },
@@ -5947,7 +5965,11 @@
       { id: "rb500",      cat: "casino", icon: "🔴", name: "Red or black?",      desc: "Bet 500 scoin on red or black in a single spin", goal: 1, get: flag("redBlack500") },
       { id: "vp500",      cat: "casino", icon: "🎴", name: "Max credits",        desc: "Play a Video Poker hand with a 500 scoin bet", goal: 1, get: flag("vp500") },
       { id: "uth500",     cat: "casino", icon: "🤠", name: "All in",             desc: "Play an Ultimate Texas Hold'em hand with a 500 scoin ante", goal: 1, get: flag("uth500") },
-      { id: "climbTop",   cat: "casino", icon: "🎈", name: "Top of the sky",     desc: "Reach step 20 in Sky Climb",          goal: 1, get: flag("climbTop") },
+      ...[["roulette", "🎡", "Roulette", "spins"], ["blackjack", "🃏", "Blackjack", "rounds"], ["plinko", "🔻", "Plinko", "balls"],
+          ["climb", "🎈", "Sky Climb", "rounds"], ["vp", "🎴", "Video Poker", "hands"], ["uth", "🤠", "Ultimate Texas Hold'em", "hands"]]
+        .flatMap(([g, icon, label, unit]) => [100, 1000].map(n => ({
+          id: `play-${g}-${n}`, cat: "casino", icon, name: `${label} ${n === 100 ? "regular" : "veteran"}`,
+          desc: `Play ${n.toLocaleString()} ${label} ${unit}`, goal: n, get: () => (state.stats.played && state.stats.played[g]) || 0 }))),
       // Investments
       { id: "prop1",      cat: "invest", icon: "🏠", name: "Landlord",           desc: "Buy your first property",             goal: 1,  get: () => Math.max(inv.properties.length, state.invest.stats && state.invest.stats.re && state.invest.stats.re.in > 0 ? 1 : 0) },
       { id: "prop10",     cat: "invest", icon: "🏘️", name: "Property portfolio", desc: "Own 10 properties at once",           goal: 10, get: () => inv.properties.length },

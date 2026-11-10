@@ -915,11 +915,14 @@
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">🛢️ Crude oil tankers</h2>
+        <button class="btn ghost small agentToggle" id="tankerAgent" title="The agent picks a random contract 5 seconds after the offers appear. Fee: 2% of the contract, paid from your money.">🤖 Logistics agent: OFF</button>
         <button class="btn ghost small" data-info="logi">ℹ️ Info</button></div>
       <div class="muted infoBox" id="info-logi" hidden>Buy an <b>Aframax</b> tanker (75 scoin) for one of your 10 slots. Each free tanker gets
         <b>4 contract offers</b>: pick one and the tanker sails. When it arrives, the whole contract is paid to your money.
         Then it gets 4 new offers. Longer routes pay more per second, and the two ocean crossings pay the most.
-        A tanker earns back its price in about 3 hours. Voyages only move while the game is open.</div>
+        A tanker earns back its price in about 3 hours. Voyages only move while the game is open.
+        <br><br>🤖 <b>Logistics agent:</b> turn it on and it picks a random contract for any waiting tanker 5 seconds after the offers appear.
+        It charges 2% of that contract's profit, taken from your money the moment it picks. It waits if you can't afford the fee.</div>
       <div id="tankers" style="margin-top:12px"></div>
     </div>
   </section>
@@ -5071,11 +5074,13 @@
     if (!logi.trucks) logi.trucks = [];
     const fleetList = (key) => key === "tanker" ? logi.tankers : logi.trucks;
 
-    // Logistics agent (trucks): picks a random contract after 5 s for a 2% fee
+    // Logistics agent (one switch for trucks, one for tankers): picks a random contract after 5 s for a 2% fee
     const AGENT_DELAY = 5, AGENT_FEE = 0.02;
     if (logi.truckAgent === undefined) logi.truckAgent = false;
+    if (logi.tankerAgent === undefined) logi.tankerAgent = false;
+    const agentOn = (key) => !!logi[key + "Agent"];
     function agentTick(key) {
-      if (key !== "truck" || !logi.truckAgent) return false;
+      if (!agentOn(key)) return false;
       let picked = false;
       for (const v of fleetList(key)) {
         if (v.contract || !v.offers) continue;
@@ -5103,15 +5108,19 @@
       return picked;
     }
     function updateAgentButton() {
-      const b = $("truckAgent");
-      b.textContent = "🤖 Logistics agent: " + (logi.truckAgent ? "ON" : "OFF");
-      b.classList.toggle("on", logi.truckAgent);
+      for (const key of ["truck", "tanker"]) {
+        const b = $(key + "Agent");
+        b.textContent = "🤖 Logistics agent: " + (agentOn(key) ? "ON" : "OFF");
+        b.classList.toggle("on", agentOn(key));
+      }
     }
-    $("truckAgent").addEventListener("click", () => {
-      logi.truckAgent = !logi.truckAgent;
-      logi.trucks.forEach(v => { v.wait = 0; });   // everyone waiting gets a fresh 5 seconds
-      updateAgentButton(); renderFleet("truck"); save();
-    });
+    for (const key of ["truck", "tanker"]) {
+      $(key + "Agent").addEventListener("click", () => {
+        logi[key + "Agent"] = !agentOn(key);
+        fleetList(key).forEach(v => { v.wait = 0; });   // everyone waiting gets a fresh 5 seconds
+        updateAgentButton(); renderFleet(key); save();
+      });
+    }
 
     // 4 different routes with random transit times and profits
     function makeContracts(key = "tanker") {
@@ -5200,7 +5209,7 @@
                 <span class="muted">≈ ${fmt(o.profit / o.seconds)} / sec</span>${r.long ? ` <span class="long">LONG HAUL</span>` : ""}
               </button>`;
             }).join("")}</div>
-            ${key === "truck" && logi.truckAgent ? `<div class="agentNote" id="agent-${v.id}">🤖 Agent picks a contract in ${Math.max(0, AGENT_DELAY - (v.wait || 0))}s</div>` : ""}
+            ${agentOn(key) ? `<div class="agentNote" id="agent-${v.id}">🤖 Agent picks a contract in ${Math.max(0, AGENT_DELAY - (v.wait || 0))}s</div>` : ""}
           </div>`;
         }
       });

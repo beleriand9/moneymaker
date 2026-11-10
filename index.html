@@ -4946,11 +4946,11 @@
     }
 
     /* ----- ⛏️ Gold mine: needs 500k all-time gold profit, costs 5M, up to 2 at once.
-       Each mine holds a random 25M - 50M of gold and pays a fixed 250 per second until it is empty. ----- */
+       Each mine holds a random 25M - 50M of gold and pays a fixed 500 per second until it is empty. ----- */
     const MINE_PRICE = 5000000;
     const MINE_UNLOCK = 500000;
     const MINE_MAX = 2;
-    const MINE_INCOME = 250;
+    const MINE_INCOME = 500;
     if (!state.special.mines) state.special.mines = [];
 
     function goldProfit() {

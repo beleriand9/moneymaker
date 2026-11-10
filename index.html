@@ -283,6 +283,18 @@
     }
     .pcard.deal { animation: dealIn 0.35s ease-out; }
     @keyframes dealIn { from { opacity: 0; transform: translate(0, -60px) rotate(-8deg) scale(0.8); } to { opacity: 1; transform: none; } }
+    /* Achievements */
+    #achievementsView { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .achHead { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px; }
+    .achGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .ach { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); }
+    .ach .ico { font-size: 28px; width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0,0,0,0.3); filter: grayscale(1); opacity: 0.5; }
+    .ach.done { border-color: #ffd34d; background: rgba(255, 211, 77, 0.09); }
+    .ach.done .ico { filter: none; opacity: 1; background: radial-gradient(circle, #ffe680, #c98a00); }
+    .ach .nm { font-weight: 800; }
+    .ach .bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.1); margin-top: 6px; overflow: hidden; }
+    .ach .bar div { height: 100%; background: linear-gradient(90deg, #6ec6ff, #b388ff); }
+    .alertPop.good { background: #7a5a00; border-color: #ffd34d; }
     /* Red alert pop-ups (top right, don't pause the game) */
     #alerts { position: fixed; top: 70px; right: 16px; z-index: 60; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
     .alertPop {
@@ -796,6 +808,7 @@
     <button class="tab" data-view="casino">🎰 Casino</button>
     <button class="tab" data-view="invest">📈 Investing</button>
     <button class="tab" data-view="logistics">🚢 Logistics</button>
+    <button class="tab" data-view="achievements">🏆 Achievements <span id="achTab"></span></button>
     <button class="tab" data-view="shop">🛍️ Shop</button>
   </nav>
 
@@ -987,6 +1000,14 @@
         <br><br>🤖 <b>Logistics agent:</b> picks a random contract 5 seconds after the offers appear, for 2% of that contract's profit.</div>
       <div id="planes" style="margin-top:12px"></div>
     </div>
+  </section>
+
+  <!-- ===== Achievements (filled in by JavaScript) ===== -->
+  <section id="achievementsView" hidden>
+    <div class="card wallet">
+      <div class="stat"><div class="label">🏆 Achievements unlocked</div><div class="value" id="achTotal">0</div></div>
+    </div>
+    <div id="achList"></div>
   </section>
 
   <!-- ===== Shop: cosmetics ===== -->
@@ -1922,6 +1943,7 @@
         // how much gold this mine holds: random 25M - 50M (rounded to 100k)
         const capacity = (250 + secureRandomInt(251)) * 100000;
         state.special.mines.push({ id: state.nextId++, capacity, mined: 0 });
+        state.stats.minesBought++;
         showNotice("⛏️ Gold mine bought! It holds " + coins(capacity) + " of gold.");
       }
       if (action === "buySpecial" && btn.dataset.special === "agency") {
@@ -1998,6 +2020,7 @@
       if ($("hint").textContent.startsWith("Max ")) $("hint").textContent = "";
       state.money += clickValue();
       clickedThisSecond += clickValue();   // counts toward taxable income
+      state.stats.clicks++;
       updateCounter();
       save();
 
@@ -2058,9 +2081,9 @@
     }
 
     /* ----- Red alert pop-up: shows for 8 seconds, click to close ----- */
-    function showAlert(title, text) {
+    function showAlert(title, text, kind = "") {
       const el = document.createElement("div");
-      el.className = "alertPop";
+      el.className = "alertPop " + kind;
       el.innerHTML = `<b>${title}</b>${text}<br><small>Click to close</small>`;
       el.addEventListener("click", () => el.remove());
       $("alerts").appendChild(el);
@@ -2205,6 +2228,7 @@
       // Special businesses
       const agencyIncome = agencyTick();
       perSecond += agencyIncome + mineTick() + lawTick() + parkTick() + portTick();
+      if (perSecond > state.stats.bestIncome) state.stats.bestIncome = perSecond;   // record for achievements
 
       state.money = Math.max(0, state.money + perSecond);
 
@@ -2235,6 +2259,8 @@
       $("investView").hidden = view !== "invest";
       $("shopView").hidden = view !== "shop";
       $("logisticsView").hidden = view !== "logistics";
+      $("achievementsView").hidden = view !== "achievements";
+      if (view === "achievements" && typeof renderAchievements === "function") renderAchievements();
       document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
       save();
     }
@@ -3967,6 +3993,8 @@
 
       t.result = cat;
       t.jackpotWon = jackpot > 0;
+      if (jackpot > 0) state.stats.vpJackpot = true;
+      if (cat === 11) state.stats.royal = true;
       const net = back + jackpot - bet;
       t.message = (cat ? hand.name + "! " : "") +
         (jackpot ? `💰 JACKPOT +${fmt(jackpot)}! ` : "") +
@@ -4255,6 +4283,7 @@
       let wagered = 0, back = 0, cashback = 0;
       for (const h of t.hands) {
         const pScore = pkBest([...h.cards, ...t.board]), cat = pkCat(pScore);
+        if (cat === 9) state.stats.royal = true;
         h.handName = PK_NAMES[cat];
         const bet = h.ante + h.blind + h.play + h.trips;
         let ret = 0;
@@ -4645,7 +4674,7 @@
       } else {
         climb.step++;
         if (ball === "d") { climb.shield = true; climb.message = "✨ Gold ball! You climbed and got a shield against the next red ball."; }
-        if (climb.step === 20) { climb.busy = false; climbCashOut(true); return; }
+        if (climb.step === 20) { state.stats.climbTop = true; climb.busy = false; climbCashOut(true); return; }
       }
       climb.busy = false;
       updateCounter(); save();
@@ -5681,6 +5710,7 @@
             const pay = contractPayout(key, v.contract.profit);   // trucks get the warehouse bonus
             paid += pay;
             logi.earned += pay;
+            logi.contracts = (logi.contracts || 0) + 1;
             const r = F.routes[v.contract.route];
             showNotice(`${F.icon} ${v.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(pay)}!`);
             v.contract = null;
@@ -5836,6 +5866,114 @@
     $("trucks").addEventListener("click", fleetClick);
     $("planes").addEventListener("click", fleetClick);
 
+    /* =====================================================================
+       ACHIEVEMENTS: checked every second. Each one has a goal and a function that
+       measures your progress. Unlocked ones are saved with the time you got them.
+       ===================================================================== */
+    const SC = 1e6;   // 1 scoin
+    const ACH_CATEGORIES = [
+      { id: "income", name: "💰 Income" }, { id: "casino", name: "🎰 Casino" },
+      { id: "invest", name: "📈 Investments" }, { id: "logistics", name: "🚢 Logistics" },
+    ];
+    const flag = (k) => () => (state.stats[k] ? 1 : 0);
+    const ACHIEVEMENTS = [
+      // Income
+      { id: "click100",   cat: "income", icon: "👆", name: "Warming up",         desc: "Click the coin 100 times",            goal: 100,    get: () => state.stats.clicks },
+      { id: "click1k",    cat: "income", icon: "👆", name: "Clicker",            desc: "Click the coin 1,000 times",          goal: 1000,   get: () => state.stats.clicks },
+      { id: "click10k",   cat: "income", icon: "🖱️", name: "Click machine",      desc: "Click the coin 10,000 times",         goal: 10000,  get: () => state.stats.clicks },
+      { id: "click100k",  cat: "income", icon: "🦾", name: "Iron finger",        desc: "Click the coin 100,000 times",        goal: 100000, get: () => state.stats.clicks },
+      { id: "wash3",      cat: "income", icon: "🚗", name: "Squeaky clean",      desc: "Own 3 car washes",                    goal: 3, get: () => ownedOf("carwash") },
+      { id: "repair3",    cat: "income", icon: "🔧", name: "Grease monkey",      desc: "Own 3 car repair shops",              goal: 3, get: () => ownedOf("repair") },
+      { id: "salon3",     cat: "income", icon: "🚘", name: "Showroom king",      desc: "Own 3 car salons",                    goal: 3, get: () => ownedOf("salon") },
+      { id: "casino2",    cat: "income", icon: "🎰", name: "The house always wins", desc: "Own 2 casinos",                    goal: 2, get: () => ownedOf("casino") },
+      { id: "hotel2",     cat: "income", icon: "🏨", name: "Hotelier",           desc: "Own 2 hotels",                        goal: 2, get: () => ownedOf("hotel") },
+      { id: "warehouse5", cat: "income", icon: "📦", name: "Storage empire",     desc: "Own 5 warehouses",                    goal: 5, get: () => warehouseCount() },
+      { id: "law10",      cat: "income", icon: "⚖️", name: "Full legal team",    desc: "Fill all 10 attorney slots in the law firm", goal: 10, get: () => state.special.law ? state.special.law.attorneys.length : 0 },
+      { id: "agents100",  cat: "income", icon: "🏢", name: "Agency boss",        desc: "Have 100 real estate agents",         goal: 100, get: () => state.special.agency && state.special.agency.agents ? state.special.agency.agents.length : 0 },
+      { id: "mine1",      cat: "income", icon: "⛏️", name: "Gold digger",        desc: "Buy your first gold mine",            goal: 1, get: () => state.stats.minesBought },
+      { id: "mine4",      cat: "income", icon: "⛏️", name: "Mining magnate",     desc: "Buy 4 gold mines (all-time)",         goal: 4, get: () => state.stats.minesBought },
+      { id: "port",       cat: "income", icon: "⚓", name: "Harbor master",      desc: "Buy the Trading Port",                goal: 1, get: () => state.special.port ? 1 : 0 },
+      { id: "parks2",     cat: "income", icon: "🎢", name: "Theme park tycoon",  desc: "Pair two amusement parks with hotels", goal: 2, get: () => state.special.parks.length },
+      { id: "inc5k",      cat: "income", icon: "📈", name: "Money printer",      desc: "Reach an income of 5,000 / sec",      goal: 5000,  get: () => state.stats.bestIncome, money: true },
+      { id: "inc10k",     cat: "income", icon: "💸", name: "Money fountain",     desc: "Reach an income of 10,000 / sec",     goal: 10000, get: () => state.stats.bestIncome, money: true },
+      // Casino
+      { id: "bet1s",      cat: "casino", icon: "🎲", name: "Regular",            desc: "Bet 1 scoin in total",                goal: SC,       get: () => state.casinoStats.wagered, money: true },
+      { id: "bet100s",    cat: "casino", icon: "🎲", name: "High roller",        desc: "Bet 100 scoin in total",              goal: 100 * SC, get: () => state.casinoStats.wagered, money: true },
+      { id: "glevel10",   cat: "casino", icon: "🎖️", name: "Known face",         desc: "Reach Gambler level 10",              goal: 10, get: () => levelInfo(state.casinoXp).level },
+      { id: "glevel25",   cat: "casino", icon: "👑", name: "Whale",              desc: "Reach Gambler level 25",              goal: 25, get: () => levelInfo(state.casinoXp).level },
+      { id: "casinoUp",   cat: "casino", icon: "🤑", name: "Beat the house",     desc: "Be 1 scoin up in the casino (all-time earnings)", goal: SC, get: () => state.casinoStats.returned - state.casinoStats.wagered, money: true },
+      { id: "royal",      cat: "casino", icon: "♠️", name: "Royal Flush!",       desc: "Get a Royal Flush in Video Poker or Ultimate Texas Hold'em", goal: 1, get: flag("royal") },
+      { id: "jackpot",    cat: "casino", icon: "💰", name: "Jackpot!",           desc: "Win a Video Poker jackpot",           goal: 1, get: flag("vpJackpot") },
+      { id: "climbTop",   cat: "casino", icon: "🎈", name: "Top of the sky",     desc: "Reach step 20 in Sky Climb",          goal: 1, get: flag("climbTop") },
+      // Investments
+      { id: "prop1",      cat: "invest", icon: "🏠", name: "Landlord",           desc: "Buy your first property",             goal: 1,  get: () => Math.max(inv.properties.length, state.invest.stats && state.invest.stats.re && state.invest.stats.re.in > 0 ? 1 : 0) },
+      { id: "prop10",     cat: "invest", icon: "🏘️", name: "Property portfolio", desc: "Own 10 properties at once",           goal: 10, get: () => inv.properties.length },
+      { id: "re1s",       cat: "invest", icon: "🏙️", name: "Real estate mogul",  desc: "1 scoin all-time real estate profit", goal: SC,      get: () => reProfit(), money: true },
+      { id: "re10s",      cat: "invest", icon: "🌆", name: "Skyline owner",      desc: "10 scoin all-time real estate profit", goal: 10 * SC, get: () => reProfit(), money: true },
+      { id: "gold1s",     cat: "invest", icon: "🥇", name: "Golden touch",       desc: "1 scoin all-time gold profit",        goal: SC, get: () => goldProfit(), money: true },
+      { id: "petfFull",   cat: "invest", icon: "🏦", name: "Insider",            desc: "Fill the Broker ETF (10 scoin invested)", goal: 10 * SC, get: () => investCurrent("petf"), money: true },
+      { id: "ilevel10",   cat: "invest", icon: "📊", name: "Analyst",            desc: "Reach Investor level 10",             goal: 10, get: () => levelInfo(inv.xp).level },
+      { id: "ilevel25",   cat: "invest", icon: "🐂", name: "Wolf of Wall Street", desc: "Reach Investor level 25",            goal: 25, get: () => levelInfo(inv.xp).level },
+      // Logistics
+      { id: "truck15",    cat: "logistics", icon: "🚛", name: "Trucking company", desc: "Buy 15 semi-trucks",                 goal: 15, get: () => logi.trucks.length },
+      { id: "tanker1",    cat: "logistics", icon: "🚢", name: "Set sail",         desc: "Buy your first oil tanker",          goal: 1,  get: () => logi.tankers.length },
+      { id: "tanker10",   cat: "logistics", icon: "🛢️", name: "Oil baron",        desc: "Buy 10 oil tankers",                 goal: 10, get: () => logi.tankers.length },
+      { id: "plane1",     cat: "logistics", icon: "✈️", name: "Taking off",       desc: "Buy your first cargo plane",         goal: 1,  get: () => logi.planes.length },
+      { id: "plane5",     cat: "logistics", icon: "🛫", name: "Airline",          desc: "Buy 5 cargo planes",                 goal: 5,  get: () => logi.planes.length },
+      { id: "con100",     cat: "logistics", icon: "📋", name: "Reliable carrier", desc: "Fulfill 100 logistics contracts",    goal: 100,   get: () => logi.contracts || 0 },
+      { id: "con1k",      cat: "logistics", icon: "📋", name: "Logistics pro",    desc: "Fulfill 1,000 logistics contracts",  goal: 1000,  get: () => logi.contracts || 0 },
+      { id: "con10k",     cat: "logistics", icon: "🌍", name: "Global network",   desc: "Fulfill 10,000 logistics contracts", goal: 10000, get: () => logi.contracts || 0 },
+      { id: "logi1s",     cat: "logistics", icon: "💵", name: "First big haul",   desc: "Earn 1 scoin from logistics",        goal: SC,       get: () => logi.earned, money: true },
+      { id: "logi100s",   cat: "logistics", icon: "💎", name: "Shipping tycoon",  desc: "Earn 100 scoin from logistics",      goal: 100 * SC, get: () => logi.earned, money: true },
+    ];
+
+    if (!state.stats) state.stats = {};
+    for (const [k, v] of Object.entries({ clicks: 0, minesBought: state.special.mines.length, bestIncome: 0 }))
+      if (typeof state.stats[k] !== "number") state.stats[k] = v;
+    if (!state.achievements) state.achievements = {};
+
+    const achDone = () => ACHIEVEMENTS.filter(a => state.achievements[a.id]).length;
+    function achValue(a) { try { return Math.max(0, a.get() || 0); } catch (err) { return 0; } }
+
+    let achFirstCheck = true;
+    function checkAchievements() {
+      const fresh = [];
+      for (const a of ACHIEVEMENTS) {
+        if (state.achievements[a.id]) continue;
+        if (achValue(a) >= a.goal) { state.achievements[a.id] = Date.now(); fresh.push(a); }
+      }
+      // an old save can unlock many at once: just mark them, without a pop-up for each
+      if (achFirstCheck && fresh.length > 3) showAlert(`🏆 ${fresh.length} achievements unlocked!`, "Your progress so far already earned them. See 🏆 Achievements.", "good");
+      else fresh.forEach(a => showAlert(`🏆 Achievement unlocked!`, `${a.icon} <b style="display:inline">${a.name}</b>: ${a.desc}`, "good"));
+      achFirstCheck = false;
+      if (fresh.length) save();
+      $("achTab").textContent = `${achDone()}/${ACHIEVEMENTS.length}`;
+      if (!$("achievementsView").hidden) renderAchievements();
+    }
+
+    function renderAchievements() {
+      $("achTotal").textContent = `${achDone()} / ${ACHIEVEMENTS.length}`;
+      $("achList").innerHTML = ACH_CATEGORIES.map(c => {
+        const list = ACHIEVEMENTS.filter(a => a.cat === c.id);
+        const done = list.filter(a => state.achievements[a.id]).length;
+        return `<div class="achHead"><h2 style="margin:0">${c.name}</h2><span class="muted">${done} / ${list.length}</span></div>
+          <div class="achGrid">${list.map(a => {
+            const got = state.achievements[a.id];
+            const v = Math.min(a.goal, achValue(a));
+            const show = (x) => a.money ? fmt(x) : x.toLocaleString();
+            return `<div class="ach ${got ? "done" : ""}">
+              <div class="ico">${a.icon}</div>
+              <div style="flex:1; min-width:0">
+                <div class="nm">${a.name}</div>
+                <div class="muted">${a.desc}</div>
+                ${got ? `<div class="muted" style="color:#ffd34d">✔ Unlocked ${new Date(got).toLocaleDateString()}</div>`
+                      : a.goal > 1 ? `<div class="bar"><div style="width:${100 * v / a.goal}%"></div></div><div class="muted">${show(Math.floor(v))} / ${show(a.goal)}</div>` : ""}
+              </div></div>`;
+          }).join("")}</div>`;
+      }).join("");
+    }
+    setInterval(checkAchievements, 1000);
+
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;
 
@@ -5850,7 +5988,7 @@
     updateInvestLive();
     renderCosmetics(); applyCosmetics();
     renderTankers(); updateAgentButton();
-    showView(["casino", "invest", "shop", "logistics"].includes(state.view) ? state.view : "income");
+    showView(["casino", "invest", "shop", "logistics", "achievements"].includes(state.view) ? state.view : "income");
     if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
     else if (state.pendingTaxId !== null) {
       const d = state.taxDebts.find(x => x.id === state.pendingTaxId);

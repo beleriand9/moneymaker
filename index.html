@@ -1668,6 +1668,8 @@
         state.special.law = { attorneys: [], offer: null };
         showNotice("⚖️ Law firm opened! Buy attorney slots to hire lawyers.");
       }
+      if (action === "toggleLaw") state.special.lawCollapsed = !state.special.lawCollapsed;
+      if (action === "toggleAgency") state.special.agencyCollapsed = !state.special.agencyCollapsed;
       if (action === "lawSlot") {
         const law = state.special.law;
         if (!law || law.offer || law.attorneys.length >= LAW_MAX || state.money < lawSlotPrice()) return;
@@ -4092,8 +4094,15 @@
       const income = law.attorneys.reduce((s, a) => s + ((a.type === "divorce" || a.type === "civil") ? a.value : 0), 0);
       let html = `<div class="card specialCard">
         <div class="row"><h3>⚖️ Law Firm</h3><span class="income" id="law-income">+${income.toFixed(1)} / sec</span></div>
-        <h4>Attorneys (${law.attorneys.length} / ${LAW_MAX})</h4>
-        <div class="lawSlots">`;
+        <div class="row"><h4>Attorneys (${law.attorneys.length} / ${LAW_MAX})</h4>
+          <button class="btn ghost small" data-action="toggleLaw">${state.special.lawCollapsed ? "▸ Show" : "▾ Minimize"}</button></div>`;
+      if (state.special.lawCollapsed) {
+        // one-line summary: each lawyer type and how many you have
+        const counts = {};
+        law.attorneys.forEach(a => counts[a.type] = (counts[a.type] || 0) + 1);
+        html += `<div class="muted">${Object.keys(counts).map(t => `${ATTORNEYS[t].emoji} ${ATTORNEYS[t].name} ×${counts[t]}`).join(" · ") || "No attorneys yet."}</div>`;
+      } else {
+      html += `<div class="lawSlots">`;
       law.attorneys.forEach(a => {
         const at = ATTORNEYS[a.type];
         html += `<div class="lawSlot" title="${at.desc}"><b>${at.emoji} ${at.name}</b><br>
@@ -4101,6 +4110,7 @@
       });
       for (let i = law.attorneys.length; i < LAW_MAX; i++) html += `<div class="lawSlot empty">Empty slot</div>`;
       html += `</div>`;
+      }
 
       if (law.offer) {
         html += `<h4>Choose your new attorney</h4><div class="choices">` +
@@ -4129,8 +4139,11 @@
           <div class="muted">+2% bonus every time you sell a property · one new agent for every 100k of real estate profit · each agent earns 0, 5, 10 or 15 at random every second (7.5 / sec on average)</div>
           <div class="muted" style="margin-top:4px">${full ? "Your agency is full (max " + AGENCY_MAX_AGENTS + " agents)." :
             `Next agent at ${fmt(next)} real estate profit (now ${profit >= 0 ? "" : "−"}${fmt(Math.abs(profit))})`}</div>
-          <h4>Agents (${ag.agents.length} / ${AGENCY_MAX_AGENTS})</h4>
-          ${ag.agents.length ? `<div class="agents">${ag.agents.map((r, i) =>
+          <div class="row"><h4>Agents (${ag.agents.length} / ${AGENCY_MAX_AGENTS})</h4>
+            ${ag.agents.length ? `<button class="btn ghost small" data-action="toggleAgency">${state.special.agencyCollapsed ? "▸ Show" : "▾ Minimize"}</button>` : ""}</div>
+          ${state.special.agencyCollapsed && ag.agents.length
+            ? `<div class="muted">${ag.agents.length} agents · about ${fmt(ag.agents.length * 7.5)} / sec on average</div>`
+            : ag.agents.length ? `<div class="agents">${ag.agents.map((r, i) =>
             `<div class="agent ${r === 0 ? "zero" : ""}">🧑‍💼 Agent ${i + 1}<br><b id="agent-${i}">${r} / sec</b></div>`).join("")}</div>`
             : `<div class="muted">No agents yet.</div>`}
         </div>`;

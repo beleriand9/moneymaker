@@ -4356,10 +4356,22 @@
       return html;
     }
 
+    // Special businesses, cheapest first
     function renderSpecialBusinesses() {
+      const list = [
+        [WAREHOUSE_PRICE, renderWarehouses],   // 300k
+        [LAW_PRICE, renderLawFirm],            // 500k
+        [AGENCY_PRICE, renderAgency],          // 1M
+        [PARK_PRICE, renderParks],             // 1.75M
+        [MINE_PRICE, renderMines],             // 5M
+      ].sort((a, b) => a[0] - b[0]);
+      return `<h2 class="specialHead">⭐ Special businesses</h2>` + list.map(([, fn]) => fn()).join("");
+    }
+
+    function renderAgency() {
       const ag = state.special.agency;
       const profit = reProfit();
-      let html = `<h2 class="specialHead">⭐ Special businesses</h2>`;
+      let html = "";
 
       if (ag) {
         const income = ag.agents.reduce((a, b) => a + b, 0);
@@ -4395,7 +4407,7 @@
           <span class="muted">${fmt(AGENCY_PRICE)}</span>
         </div></div>`;
       }
-      return html + renderMines() + renderLawFirm() + renderParks() + renderWarehouses();
+      return html;
     }
 
     /* =====================================================================

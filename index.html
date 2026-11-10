@@ -2007,6 +2007,9 @@
       { id: "rouletteHigh", name: "Roulette: High rollers",  emoji: "💎", desc: "European roulette, bets from 5,000 to 250,000 per spot." },
       { id: "bjLow",  name: "Blackjack: Classic table", emoji: "🃏", desc: "Play 1 to 3 hands against the dealer. Bets from 100 to 5,000 per hand." },
       { id: "bjHigh", name: "Blackjack: High rollers",  emoji: "♠️", desc: "Play 1 to 3 hands against the dealer. Bets from 5,000 to 250,000 per hand." },
+      { id: "rouletteSuper", name: "Roulette: Super high rollers", emoji: "💎💎", desc: "European roulette, bets from 10 to 500 scoin per spot." },
+      { id: "bjSuper", name: "Blackjack: Super high rollers", emoji: "💎♠️", desc: "Play 1 to 3 hands against the dealer. Bets from 10 to 500 scoin per hand." },
+      { id: "plinkoSuper", name: "Plinko: Super high rollers", emoji: "💎🔻", desc: "Same pyramid, 0.3× to 250×, up to 20 balls. Bets from 10 to 50 scoin per ball." },
       { id: "plinko", name: "Plinko", emoji: "🔻", desc: "Drop up to 20 balls down a peg pyramid into multipliers from 0.3× to 250×. Bets 5,000 – 250,000 per ball." },
       { id: "climb",  name: "Sky Climb", emoji: "🎈", desc: "Draw balls to climb a 20-step ladder up to 50,000×. Cash out before a red ball pops your balloon! Bets 10,000 – 250,000." },
     ];
@@ -2092,14 +2095,18 @@
       if (ROULETTE_TABLES[currentGame]) { roulette = ROULETTE_TABLES[currentGame]; renderRoulette(); }
       if (BJ_TABLES[currentGame]) { bj = BJ_TABLES[currentGame]; renderBlackjack(); }
       if (currentGame === "climb") renderClimb();
-      if (currentGame === "plinko") renderPlinko();
+      if (PLINKO_TABLES[currentGame]) {
+        const cfg = PLINKO_TABLES[currentGame];
+        if (!cfg.chips.includes(plinko.bet)) plinko.bet = cfg.chips[0];   // reset the bet when changing tables
+        renderPlinko();
+      }
     }
 
     $("casinoGame").addEventListener("click", (e) => {
       const card = e.target.closest("[data-game]");
       if (card) { currentGame = card.dataset.game; renderCasino(); }
       const back = e.target.closest("[data-back]");
-      if (back && !roulette.spinning && !(bj && bj.phase !== "betting") && !(currentGame === "climb" && climb.active) && !(currentGame === "plinko" && plinko.balls.length)) { currentGame = null; renderCasino(); }
+      if (back && !roulette.spinning && !(bj && bj.phase !== "betting") && !(currentGame === "climb" && climb.active) && !(PLINKO_TABLES[currentGame] && plinko.balls.length)) { currentGame = null; renderCasino(); }
     });
 
     /* =====================================================================
@@ -2157,6 +2164,7 @@
     const ROULETTE_TABLES = {
       rouletteLow:  makeTable("rouletteLow",  "Roulette: Classic table", "🎡", 100,  5000,   [100, 500, 1000, 5000]),
       rouletteHigh: makeTable("rouletteHigh", "Roulette: High rollers",  "💎", 5000, 250000, [5000, 10000, 25000, 50000, 100000, 250000]),
+      rouletteSuper: makeTable("rouletteSuper", "Roulette: Super high rollers", "💎💎", 10000000, 500000000, [10000000, 25000000, 50000000, 100000000, 250000000, 500000000]),
     };
     let roulette = ROULETTE_TABLES.rouletteLow;   // the table you are looking at
     const anyTableSpinning = () => Object.values(ROULETTE_TABLES).some(t => t.spinning);
@@ -2174,6 +2182,9 @@
     const setBets = (table, bets) => { table.bets = state.rouletteBets.tables[table.id] = bets; };
 
     const totalBets = (table = roulette) => Object.values(table.bets).reduce((a, b) => a + b, 0);
+    // Chip labels: up to 999k in bcoin ("250k"), from 1 scoin up in scoin ("10sc", "500sc")
+    const chipLabel = (v) => v >= 1e6 ? (Math.round(v / 1e6 * 100) / 100) + "sc" : shortNum(v);
+
     // 1500 -> "1.5k", 5000000 -> "5M", 2500000000 -> "2.5B"
     const shortNum = (v) => {
       const r = (x) => String(Math.round(x * 100) / 100);
@@ -2194,6 +2205,12 @@
       50000:  { bg: "#ec407a", text: "#fff" },      // pink
       100000: { bg: "#37474f", text: "#ffd34d" },   // dark grey, gold text
       250000: { bg: "#ffd700", text: "#3e2b00" },   // gold
+      10000000:  { bg: "#00897b", text: "#fff" },    // teal      (10 scoin)
+      25000000:  { bg: "#5e35b1", text: "#fff" },    // violet    (25 scoin)
+      50000000:  { bg: "#c62828", text: "#fff" },    // crimson   (50 scoin)
+      100000000: { bg: "#111111", text: "#ffd34d" }, // black/gold (100 scoin)
+      250000000: { bg: "#ff6f00", text: "#fff" },    // amber     (250 scoin)
+      500000000: { bg: "#cfd8dc", text: "#263238" }, // platinum  (500 scoin)
     };
     // A stack of bets shows the color of the biggest chip that fits in it
     function chipColor(amount) {
@@ -2202,7 +2219,7 @@
     }
     function chipMark(amount) {
       const c = chipColor(amount);
-      return `<span class="chipMark" style="background:${c.bg}; color:${c.text}">${shortNum(amount)}</span>`;
+      return `<span class="chipMark" style="background:${c.bg}; color:${c.text}">${chipLabel(amount)}</span>`;
     }
     const insideKey = (...nums) => "x" + nums.sort((a, b) => a - b).join("-");
 
@@ -2288,7 +2305,7 @@
           <div class="chipsRow">
             <span class="muted">Chip:</span>
             ${roulette.chips.map(v => `<button class="chip ${v === roulette.chip ? "selected" : ""}" data-chip="${v}"
-                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${shortNum(v)}</button>`).join("")}
+                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
           </div>
 
           <div id="tableWrap"><div id="table">${table}</div></div>
@@ -3109,6 +3126,7 @@
     const BJ_TABLES = {
       bjLow:  makeBjTable("bjLow",  "Blackjack: Classic table", "🃏", 100,  5000,   [100, 500, 1000, 5000]),
       bjHigh: makeBjTable("bjHigh", "Blackjack: High rollers",  "♠️", 5000, 250000, [5000, 10000, 25000, 50000, 100000, 250000]),
+      bjSuper: makeBjTable("bjSuper", "Blackjack: Super high rollers", "💎♠️", 10000000, 500000000, [10000000, 25000000, 50000000, 100000000, 250000000, 500000000]),
     };
     let bj = null;   // the blackjack table you are looking at
 
@@ -3437,7 +3455,7 @@
           <div class="chipsRow">
             <span class="muted">Chip:</span>
             ${t.chips.map(v => `<button class="chip ${v === t.chip ? "selected" : ""}" data-bjchip="${v}"
-                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${shortNum(v)}</button>`).join("")}
+                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
             <span class="muted">Click a seat to add the chip. Play up to 3 seats.</span>
           </div>
           <div class="bjActions">${actions}</div>
@@ -3770,7 +3788,7 @@
           </div>
           ${climb.active ? "" : `<div class="chipsRow"><span class="muted">Bet:</span>
             ${CLIMB_CHIPS.map(v => `<button class="chip ${v === climb.chip ? "selected" : ""}" data-climbchip="${v}"
-                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${shortNum(v)}</button>`).join("")}
+                 style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
             <span class="muted">Click chips to add to your bet (max ${fmt(CLIMB_MAX)}).</span></div>`}
           <div class="bjActions">${actions}</div>
           <div id="casinoMsg" class="${/Cashed|TOP|Banked|shield|Gold/.test(climb.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${climb.message}</div>
@@ -4098,8 +4116,13 @@
        ===================================================================== */
     const PLINKO_ROWS = 12;
     const PLINKO_MULTS = [250, 10, 3, 1.5, 1, 0.6, 0.3, 0.6, 1, 1.5, 3, 10, 250];
-    const PLINKO_MIN = 5000, PLINKO_MAX = 250000, PLINKO_MAX_BALLS = 20;
-    const PLINKO_CHIPS = [5000, 10000, 25000, 50000, 100000, 250000];
+    const PLINKO_MAX_BALLS = 20;
+    const PLINKO_TABLES = {
+      plinko:      { title: "Plinko", emoji: "🔻", min: 5000, max: 250000, chips: [5000, 10000, 25000, 50000, 100000, 250000] },
+      plinkoSuper: { title: "Plinko: Super high rollers", emoji: "💎🔻", min: 10000000, max: 50000000, chips: [10000000, 25000000, 50000000] },
+    };
+    const isPlinko = () => !!PLINKO_TABLES[currentGame];
+    const plinkoCfg = () => PLINKO_TABLES[currentGame] || PLINKO_TABLES.plinko;
     const plinko = { bet: 5000, count: 1, balls: [], history: [], lastWin: null, message: "", hits: {}, raf: null, roundBet: 0, roundWin: 0 };
 
     // Balls still in the air when the page closed: give their bets back
@@ -4128,7 +4151,8 @@
       const n = plinko.count, bet = plinko.bet;
       if (plinko.balls.length + n > PLINKO_MAX_BALLS)
         return plinkoMsg(`Max ${PLINKO_MAX_BALLS} balls in the air at once (${plinko.balls.length} still falling).`);
-      if (bet < PLINKO_MIN || bet > PLINKO_MAX) return plinkoMsg(`Bet per ball must be ${fmt(PLINKO_MIN)} – ${fmt(PLINKO_MAX)}.`);
+      const cfg = plinkoCfg();
+      if (bet < cfg.min || bet > cfg.max) return plinkoMsg(`Bet per ball must be ${coins(cfg.min)} – ${coins(cfg.max)}.`);
       const total = bet * n;
       if (state.casinoChips < total) return plinkoMsg("Not enough chips. Add money to the casino first.");
 
@@ -4259,8 +4283,8 @@
     function renderPlinko() {
       $("casinoGame").innerHTML = `
         <div class="card">
-          <div class="row"><div><h2 style="margin:0">🔻 Plinko</h2>
-            <div class="muted">Bet ${fmt(PLINKO_MIN)} – ${fmt(PLINKO_MAX)} per ball · drop up to ${PLINKO_MAX_BALLS} balls at once · 12 rows · 0.3× to 250×</div></div>
+          <div class="row"><div><h2 style="margin:0">${plinkoCfg().emoji} ${plinkoCfg().title}</h2>
+            <div class="muted">Bet ${coins(plinkoCfg().min)} – ${coins(plinkoCfg().max)} per ball · drop up to ${PLINKO_MAX_BALLS} balls at once · 12 rows · 0.3× to 250×</div></div>
             <button class="btn ghost small" data-back="1" id="plinkoBack">← All games</button></div>
           <canvas id="plinkoCanvas" width="${PW}" height="${PH}"></canvas>
           <div id="plinkoControls"></div>
@@ -4272,15 +4296,15 @@
 
     function renderPlinkoControls() {
       const box = $("plinkoControls");
-      if (!box || currentGame !== "plinko") return;
+      if (!box || !isPlinko()) return;
       const total = plinko.bet * plinko.count;
       const flying = plinko.balls.length;
       $("plinkoBack").disabled = flying > 0;
       box.innerHTML = `
         <div class="chipsRow" style="justify-content:center">
           <span class="muted">Bet per ball:</span>
-          ${PLINKO_CHIPS.map(v => `<button class="chip ${v === plinko.bet ? "selected" : ""}" data-plinkobet="${v}"
-             style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${shortNum(v)}</button>`).join("")}
+          ${plinkoCfg().chips.map(v => `<button class="chip ${v === plinko.bet ? "selected" : ""}" data-plinkobet="${v}"
+             style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
         </div>
         <div class="plinkoControls">
           <div class="ballCount"><span class="muted">Balls:</span>
@@ -4293,14 +4317,14 @@
     }
 
     $("casinoGame").addEventListener("click", (e) => {
-      if (currentGame !== "plinko") return;
+      if (!isPlinko()) return;
       const chip = e.target.closest("[data-plinkobet]");
       if (chip) { plinko.bet = Number(chip.dataset.plinkobet); renderPlinkoControls(); return; }
       const btn = e.target.closest("[data-plinko]");
       if (btn && btn.dataset.plinko === "drop") plinkoDrop();
     });
     $("casinoGame").addEventListener("input", (e) => {
-      if (currentGame !== "plinko" || e.target.id !== "plinkoCount") return;
+      if (!isPlinko() || e.target.id !== "plinkoCount") return;
       plinko.count = Number(e.target.value);
       $("plinkoCountText").textContent = plinko.count;
       const btn = document.querySelector("[data-plinko=drop]");

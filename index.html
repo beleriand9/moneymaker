@@ -655,6 +655,27 @@
       box-shadow: 0 0 40px rgba(214, 40, 40, 0.6);
     }
     #modalBox h2 { font-size: 26px; }
+    #modalBox.gold {
+      max-width: 760px; border-color: #ffd34d; box-shadow: 0 0 60px rgba(255, 211, 77, 0.6);
+      background: radial-gradient(ellipse at 50% 0%, #4a3a10 0%, #2b2d42 70%);
+    }
+    #modalBox.gold h2 { color: #ffd34d; }
+    .prestigeChoices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0 6px; }
+    .prestigeChoice {
+      text-align: left; padding: 14px; border-radius: 14px; cursor: pointer; font: inherit; color: #fff;
+      background: rgba(255,255,255,0.05); border: 2px solid rgba(255, 211, 77, 0.35);
+    }
+    .prestigeChoice:hover { border-color: #ffd34d; background: rgba(255, 211, 77, 0.12); transform: translateY(-2px); }
+    .prestigeChoice .big { font-size: 34px; }
+    .prestigeChoice b { display: block; font-size: 16px; margin: 4px 0; color: #ffd34d; }
+    .prestigeChoice small { display: block; margin-top: 6px; color: #b9f6ca; }
+    @media (max-width: 700px) { .prestigeChoices { grid-template-columns: 1fr; } }
+    #prestigeBtn {
+      position: fixed; left: 16px; bottom: 16px; z-index: 50; font-size: 16px; box-shadow: 0 4px 18px rgba(255, 211, 77, 0.5);
+      background: linear-gradient(180deg, #ffe680, #c98a00); color: #3a2a00; border: none; border-radius: 999px;
+      padding: 8px 14px; font: inherit; font-weight: 900; cursor: pointer; animation: pulse 1.4s ease-in-out infinite;
+    }
+    #prestigeBtn[hidden] { display: none; }
     button.btn.big { font-size: 18px; padding: 12px 24px; margin-top: 10px; }
 
     /* ================= The golden coin ================= */
@@ -793,6 +814,7 @@
 
   <!-- ===== Tabs to switch views ===== -->
   <nav id="tabs">
+    <button id="prestigeBtn" hidden title="Reset the game for a permanent Legacy bonus">⭐ Prestige</button>
     <div id="settingsWrap">
       <button id="settingsBtn" title="Settings" aria-label="Settings">⚙️</button>
       <div id="settingsMenu" hidden>
@@ -937,6 +959,8 @@
     <div class="card wallet">
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="casinoMoney">0</div></div>
       <div class="stat"><div class="label">🎟️ Casino chips</div><div class="value chips" id="casinoChips">0</div></div>
+      <div class="stat" id="vipStat" hidden><div class="label">🎫 VIP coins</div><div class="value" id="vipCoins" style="color:#ffd34d">0</div>
+        <div class="muted" id="vipTimer"></div></div>
     </div>
     <div class="card">
       <div class="muted">Move money into the casino to play. You can add more at any time.</div>
@@ -950,6 +974,7 @@
         <button class="btn ghost" id="cashOut">Cash out all chips</button>
       </div>
     </div>
+    <div id="vipBar" class="card" hidden></div>
     <div id="casinoGame"></div>
   </section>
 
@@ -1870,6 +1895,7 @@
         : (unit === "gcoin" ? "= " + asScoin + " scoin\n" : "") + "= " + Math.floor(state.money).toLocaleString() + " bcoin";
       $("casinoMoney").textContent = fmt(state.money);
       $("casinoChips").textContent = fmt(state.casinoChips || 0);
+      updateVipBar();
       $("investMoney").textContent = fmt(state.money);
       $("shopMoney").textContent = fmt(state.money);
       $("logiMoney").textContent = fmt(state.money);
@@ -2093,10 +2119,11 @@
 
     /* ----- Pop-up window ----- */
     function showModal(html) {
+      $("modalBox").classList.remove("gold");
       $("modalBox").innerHTML = html;
       $("modal").hidden = false;
     }
-    function hideModal() { $("modal").hidden = true; }
+    function hideModal() { $("modal").hidden = true; $("modalBox").classList.remove("gold"); }
 
     function showPaymentPopup(d) {
       showModal(`<h2>🧾 Tax payment due</h2>
@@ -2231,6 +2258,7 @@
       // Special businesses
       const agencyIncome = agencyTick();
       perSecond += agencyIncome + mineTick() + lawTick() + parkTick() + portTick();
+      if (perSecond > 0) perSecond *= legacyIncomeMult();   // ⭐ Tycoon's Legacy: +25% per pick
       if (perSecond > state.stats.bestIncome) state.stats.bestIncome = perSecond;   // record for achievements
 
       state.money = Math.max(0, state.money + perSecond);
@@ -2277,6 +2305,20 @@
        CASINO WALLET: move money in and out as chips
        ===================================================================== */
     if (typeof state.casinoChips !== "number") state.casinoChips = 0;
+
+    /* ----- 🎟️ VIP coins (Legacy bonus): a separate purse for the Super high roller tables.
+       With "VIP mode" on at a table, every bet there is paid from VIP coins (and unplayed bets go back to them).
+       Whatever a round pays out goes to normal casino chips. ----- */
+    if (!state.legacy) state.legacy = { count: 0, tycoon: 0, empire: 0, vip: 0, history: [] };
+    if (!state.vip) state.vip = { coins: 0, timer: 0 };
+    if (!state.vipMode) state.vipMode = {};
+    if (typeof state.plinkoVipInPlay !== "number") state.plinkoVipInPlay = 0;
+    const SUPER_TABLES = ["rouletteSuper", "bjSuper", "plinkoSuper", "vpSuper", "uthSuper"];
+    const vipOn = (id) => state.legacy.vip > 0 && !!state.vipMode[id] && SUPER_TABLES.includes(id);
+    const purse = (id) => vipOn(id) ? state.vip.coins : state.casinoChips;
+    const purseName = (id) => vipOn(id) ? "VIP coins" : "chips";
+    function payFrom(id, x) { if (vipOn(id)) state.vip.coins -= x; else state.casinoChips -= x; }
+    function refundTo(id, x) { if (vipOn(id)) state.vip.coins += x; else state.casinoChips += x; }
 
     document.querySelectorAll("[data-pct]").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -2407,6 +2449,7 @@
 
     function renderCasino() {
       const box = $("casinoGame");
+      setTimeout(updateVipBar, 0);
       if (!currentGame) {
         const gameCard = (g) => `<button class="card gameCard" data-game="${g.id}">
              <h3>${g.emoji} ${g.name}</h3><div class="muted">${g.desc}</div></button>`;
@@ -2659,11 +2702,11 @@
 
       const betCell = e.target.closest("[data-bet]");
       if (betCell && !roulette.spinning) {
-        if (state.casinoChips < roulette.chip) return casinoMessage("Not enough chips. Add money to the casino first.");
+        if (purse(roulette.id) < roulette.chip) return casinoMessage(`Not enough ${purseName(roulette.id)}.`);
         const key = betCell.dataset.bet;
         if ((roulette.bets[key] || 0) + roulette.chip > roulette.max)
           return casinoMessage("Table limit: max " + fmt(roulette.max) + " on one spot.");
-        state.casinoChips -= roulette.chip;
+        payFrom(roulette.id, roulette.chip);
         roulette.bets[key] = (roulette.bets[key] || 0) + roulette.chip;
         roulette.lastResult = null;
         updateCounter(); renderRoulette(); save();
@@ -2671,7 +2714,7 @@
       }
 
       if (e.target.closest("#clearBets") && !roulette.spinning) {
-        state.casinoChips += totalBets();   // give the chips back
+        refundTo(roulette.id, totalBets());   // give the chips back
         setBets(roulette, {});
         updateCounter(); renderRoulette(); save();
         return;
@@ -2679,11 +2722,11 @@
 
       if (e.target.closest("#rebet") && !roulette.spinning) {
         const need = Object.values(roulette.lastBets).reduce((a, b) => a + b, 0);
-        if (state.casinoChips < need) return casinoMessage("Not enough chips to repeat (" + fmt(need) + " needed).");
+        if (purse(roulette.id) < need) return casinoMessage(`Not enough ${purseName(roulette.id)} to repeat (` + fmt(need) + " needed).");
         for (const k in roulette.lastBets)
           if ((roulette.bets[k] || 0) + roulette.lastBets[k] > roulette.max)
             return casinoMessage("Table limit: max " + fmt(roulette.max) + " on one spot.");
-        state.casinoChips -= need;
+        payFrom(roulette.id, need);
         for (const k in roulette.lastBets) roulette.bets[k] = (roulette.bets[k] || 0) + roulette.lastBets[k];
         roulette.lastResult = null;
         updateCounter(); renderRoulette(); save();
@@ -3481,7 +3524,7 @@
     if (!state.bj) state.bj = {};
     for (const id in BJ_TABLES) {
       const saved = state.bj[id] || {};
-      if (saved.inPlay > 0) state.casinoChips += saved.inPlay;
+      if (saved.inPlay > 0) refundTo(id, saved.inPlay);
       state.bj[id] = { bets: saved.bets || [0, 0, 0], inPlay: 0 };
     }
     const seatBets = (t) => state.bj[t.id].bets;
@@ -3555,7 +3598,7 @@
         t.busy = true;
         if (take) {
           const cost = insuranceCost(t);
-          state.casinoChips -= cost;
+          payFrom(t.id, cost);
           state.bj[t.id].inPlay += cost;
           t.insurance = cost;
         }
@@ -3593,13 +3636,13 @@
 
     function bjCanDouble(t) {
       const h = t.hands[t.active];
-      return h && h.cards.length === 2 && !h.splitAces && state.casinoChips >= h.bet;
+      return h && h.cards.length === 2 && !h.splitAces && purse(t.id) >= h.bet;
     }
     function bjCanSplit(t) {
       const h = t.hands[t.active];
       if (!h || h.cards.length !== 2 || h.fromSplit) return false;
       const handsInSeat = t.hands.filter(x => x.seat === h.seat).length;
-      return handsInSeat === 1 && cardValue(h.cards[0]) === cardValue(h.cards[1]) && state.casinoChips >= h.bet;
+      return handsInSeat === 1 && cardValue(h.cards[0]) === cardValue(h.cards[1]) && purse(t.id) >= h.bet;
     }
 
     async function bjAction(action) {
@@ -3616,7 +3659,7 @@
       if (action === "stand") h.done = true;
       if (action === "surrender" && bjCanSurrender(t)) { h.surrendered = true; h.done = true; }
       if (action === "double" && bjCanDouble(t)) {
-        state.casinoChips -= h.bet;
+        payFrom(t.id, h.bet);
         state.bj[t.id].inPlay += h.bet;
         h.bet *= 2;
         h.doubled = true;
@@ -3624,7 +3667,7 @@
         h.done = true;
       }
       if (action === "split" && bjCanSplit(t)) {
-        state.casinoChips -= h.bet;
+        payFrom(t.id, h.bet);
         state.bj[t.id].inPlay += h.bet;
         const second = { seat: h.seat, bet: h.bet, cards: [h.cards.pop()], done: false, result: null, fromSplit: true };
         h.fromSplit = true;
@@ -3775,7 +3818,7 @@
         const cost = insuranceCost(t);
         actions = `
           <span class="muted" style="align-self:center">Dealer shows an Ace. Insurance pays 2:1 if the dealer has blackjack.</span>
-          <button class="btn" data-bj="insYes" ${state.casinoChips >= cost ? "" : "disabled"}>🛡️ Take insurance (${fmt(cost)})</button>
+          <button class="btn" data-bj="insYes" ${purse(t.id) >= cost ? "" : "disabled"}>🛡️ Take insurance (${fmt(cost)})</button>
           <button class="btn ghost" data-bj="insNo">No insurance</button>`;
       } else {
         const playing = t.phase === "playing" && !t.busy;
@@ -3832,8 +3875,8 @@
         const bets = seatBets(t);
         if (bets.every(b => b === 0)) { t.hands = []; t.dealer = []; }   // clear the last round from the table
         if (bets[i] + t.chip > t.max) return bjMsg("Table limit: max " + fmt(t.max) + " per hand.");
-        if (state.casinoChips < t.chip) return bjMsg("Not enough chips. Add money to the casino first.");
-        state.casinoChips -= t.chip;
+        if (purse(t.id) < t.chip) return bjMsg(`Not enough ${purseName(t.id)}.`);
+        payFrom(t.id, t.chip);
         bets[i] += t.chip;
         t.message = "";
         updateCounter(); renderBlackjack(); save();
@@ -3846,7 +3889,7 @@
       if (a === "deal") bjDeal();
       if (a === "clear") {
         const bets = seatBets(t);
-        state.casinoChips += bets.reduce((x, y) => x + y, 0);
+        refundTo(t.id, bets.reduce((x, y) => x + y, 0));
         state.bj[t.id].bets = [0, 0, 0];
         updateCounter(); renderBlackjack(); save();
       }
@@ -3854,8 +3897,8 @@
         const need = t.lastBets.reduce((x, y) => x + y, 0);
         const bets = seatBets(t);
         if (t.lastBets.some((b, i) => bets[i] + b > t.max)) return bjMsg("Table limit: max " + fmt(t.max) + " per hand.");
-        if (state.casinoChips < need) return bjMsg("Not enough chips to repeat (" + fmt(need) + " needed).");
-        state.casinoChips -= need;
+        if (purse(t.id) < need) return bjMsg(`Not enough ${purseName(t.id)} to repeat (` + fmt(need) + " needed).");
+        payFrom(t.id, need);
         t.lastBets.forEach((b, i) => bets[i] += b);
         t.hands = []; t.dealer = []; t.message = "";
         updateCounter(); renderBlackjack(); save();
@@ -3955,7 +3998,7 @@
     if (!state.vp) state.vp = {};
     for (const id in VP_TABLES) {
       const saved = state.vp[id] || {};
-      if (saved.inPlay > 0) state.casinoChips += saved.inPlay;
+      if (saved.inPlay > 0) refundTo(id, saved.inPlay);
       state.vp[id] = { bet: saved.bet || 0, lastBet: saved.lastBet || 0, inPlay: 0 };
     }
     const vpBet = (t) => state.vp[t.id].bet;
@@ -3972,8 +4015,8 @@
     async function vpDeal() {
       const t = vp, bet = vpBet(t);
       if (bet < t.min || bet > t.max) return vpMsg(`Bet must be between ${fmt(t.min)} and ${fmt(t.max)}.`);
-      if (state.casinoChips < bet) return vpMsg("Not enough chips. Add money to the casino first.");
-      state.casinoChips -= bet;
+      if (purse(t.id) < bet) return vpMsg(`Not enough ${purseName(t.id)}.`);
+      payFrom(t.id, bet);
       state.vp[t.id].inPlay = bet;
       if (bet >= 500000000) state.stats.vp500 = true;
       countPlay("vp");
@@ -4215,7 +4258,7 @@
     if (!state.uth) state.uth = {};
     for (const id in UTH_TABLES) {
       const saved = state.uth[id] || {};
-      if (saved.inPlay > 0) state.casinoChips += saved.inPlay;
+      if (saved.inPlay > 0) refundTo(id, saved.inPlay);
       state.uth[id] = { seats: saved.seats || [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }], inPlay: 0 };
     }
     const uthSeats = (t) => state.uth[t.id].seats;
@@ -4234,6 +4277,11 @@
       const t = uth, seats = uthSeats(t);
       if (!seats.some(s => s.ante > 0)) return uthMsg("Put an Ante on at least one seat.");
       if (seats.some(s => s.ante > 0 && s.ante < t.min)) return uthMsg("Minimum ante is " + fmt(t.min) + ".");
+      if (vipOn(t.id)) {
+        const reserve = seats.reduce((a, s) => a + s.ante * 4, 0);   // a 4x raise on every seat
+        if (state.vip.coins < reserve)
+          return uthMsg(`With VIP coins you also need enough left for the biggest raise (4× ante): ${fmt(reserve)} needed, you have ${fmt(state.vip.coins)}.`);
+      }
       t.busy = true; t.phase = "dealing"; t.message = "";
       t.lastBets = seats.map(s => ({ ...s }));
       state.uth[t.id].inPlay = uthCost(seats);
@@ -4284,8 +4332,8 @@
       if (a.startsWith("raise")) {
         const x = Number(a.slice(5)), cost = h.ante * x;
         if (!uthRaises(t).includes(x)) return;
-        if (state.casinoChips < cost) return uthMsg("Not enough chips to raise " + fmt(cost) + ".");
-        state.casinoChips -= cost;
+        if (purse(t.id) < cost) return uthMsg(`Not enough ${purseName(t.id)} to raise ` + fmt(cost) + ".");
+        payFrom(t.id, cost);
         state.uth[t.id].inPlay += cost;
         h.play = cost;
       } else if (a === "fold") {
@@ -4410,7 +4458,7 @@
           <button class="btn ghost" data-uth="rebet" ${last ? "" : "disabled"}>↺ Repeat last bets${last ? " (" + fmt(last) + ")" : ""}</button>`;
       } else if (t.active >= 0 && !t.busy) {
         const h = t.hands[t.active];
-        const raises = uthRaises(t).map(x => `<button class="btn" data-uth="raise${x}" ${state.casinoChips >= h.ante * x ? "" : "disabled"}>Raise ${x}× (${fmt(h.ante * x)})</button>`).join("");
+        const raises = uthRaises(t).map(x => `<button class="btn" data-uth="raise${x}" ${purse(t.id) >= h.ante * x ? "" : "disabled"}>Raise ${x}× (${fmt(h.ante * x)})</button>`).join("");
         const passive = t.street === "river"
           ? `<button class="btn ghost" data-uth="fold">🏳️ Fold</button>`
           : `<button class="btn ghost" data-uth="check">Check</button>`;
@@ -4486,13 +4534,13 @@
         const s = uthSeats(t)[Number(seatStr)], v = t.chip;
         if (kind === "ante") {
           if (s.ante + v > t.max) return uthMsg("Table limit: max ante " + fmt(t.max) + ".");
-          if (state.casinoChips < v * 2) return uthMsg("Not enough chips (Ante + Blind = " + fmt(v * 2) + ").");
-          state.casinoChips -= v * 2; s.ante += v;
+          if (purse(t.id) < v * 2) return uthMsg(`Not enough ${purseName(t.id)} (Ante + Blind = ` + fmt(v * 2) + ").");
+          payFrom(t.id, v * 2); s.ante += v;
         } else {
           if (!s.ante) return uthMsg("Put an Ante on this seat first.");
           if (s.trips + v > t.max) return uthMsg("Table limit: max Trips " + fmt(t.max) + ".");
-          if (state.casinoChips < v) return uthMsg("Not enough chips. Add money to the casino first.");
-          state.casinoChips -= v; s.trips += v;
+          if (purse(t.id) < v) return uthMsg(`Not enough ${purseName(t.id)}.`);
+          payFrom(t.id, v); s.trips += v;
         }
         t.message = "";
         uthClearTable(t);
@@ -4505,7 +4553,7 @@
       if (a === "togglePay") { state.uthPayHidden = !state.uthPayHidden; renderUth(); save(); return; }
       if (a === "deal" && t.phase === "betting" && !t.busy) uthDeal();
       if (a === "clear" && t.phase === "betting") {
-        state.casinoChips += uthCost(uthSeats(t));
+        refundTo(t.id, uthCost(uthSeats(t)));
         state.uth[t.id].seats = [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }];
         uthClearTable(t);
         t.message = ""; updateCounter(); renderUth(); save();
@@ -4513,8 +4561,8 @@
       if (a === "rebet" && t.phase === "betting" && t.lastBets) {
         const seats = uthSeats(t), need = uthCost(t.lastBets);
         if (t.lastBets.some((b, i) => seats[i].ante + b.ante > t.max || seats[i].trips + b.trips > t.max)) return uthMsg("That would go over the table limit.");
-        if (state.casinoChips < need) return uthMsg("Not enough chips to repeat (" + fmt(need) + " needed).");
-        state.casinoChips -= need;
+        if (purse(t.id) < need) return uthMsg(`Not enough ${purseName(t.id)} to repeat (` + fmt(need) + " needed).");
+        payFrom(t.id, need);
         t.lastBets.forEach((b, i) => { seats[i].ante += b.ante; seats[i].trips += b.trips; });
         uthClearTable(t);
         t.message = ""; updateCounter(); renderUth(); save();
@@ -4557,7 +4605,7 @@
       let v = MONEY_PER_CLICK;
       if (pillActive()) v += PILL_SHARE * Math.max(0, state.lastIncome || 0);
       if (energyActive()) v *= ENERGY_MULTIPLIER;
-      return v;
+      return v * legacyIncomeMult();
     };
 
     function updateEnergy() {
@@ -5294,6 +5342,7 @@
 
     // Balls still in the air when the page closed: give their bets back
     if (state.plinkoInPlay > 0) state.casinoChips += state.plinkoInPlay;
+    if (state.plinkoVipInPlay > 0) { state.vip.coins += state.plinkoVipInPlay; state.plinkoVipInPlay = 0; }
     state.plinkoInPlay = 0;
 
     // Board geometry (canvas pixels)
@@ -5321,10 +5370,11 @@
       const cfg = plinkoCfg();
       if (bet < cfg.min || bet > cfg.max) return plinkoMsg(`Bet per ball must be ${coins(cfg.min)} – ${coins(cfg.max)}.`);
       const total = bet * n;
-      if (state.casinoChips < total) return plinkoMsg("Not enough chips. Add money to the casino first.");
+      const vipBall = vipOn(currentGame);
+      if (purse(currentGame) < total) return plinkoMsg(`Not enough ${purseName(currentGame)}.`);
 
-      state.casinoChips -= total;
-      state.plinkoInPlay += total;
+      payFrom(currentGame, total);
+      if (vipBall) state.plinkoVipInPlay += total; else state.plinkoInPlay += total;
       casinoRecord(total, 0);
       countPlay("plinko", n);                          // every ball is one game
       addXp(total);                                   // 1 XP per bcoin bet
@@ -5336,7 +5386,7 @@
       for (let i = 0; i < n; i++) {
         const path = [];
         for (let r = 0; r < PLINKO_ROWS; r++) path.push(secureRandomInt(2));   // 0 = left, 1 = right
-        plinko.balls.push({ path, bet, start: now + i * 140, slot: path.reduce((a, b) => a + b, 0), done: false });
+        plinko.balls.push({ path, bet, vip: vipBall, start: now + i * 140, slot: path.reduce((a, b) => a + b, 0), done: false });
       }
       updateCounter(); save();
       renderPlinkoControls();
@@ -5374,7 +5424,8 @@
       if (mult === 250) state.stats.plinko250 = true;
       const cashback = mult < 1 ? ball.bet * (1 - mult) * cashbackRate() : 0;   // cashback on the lost part
       state.casinoChips += win + cashback;
-      state.plinkoInPlay = Math.max(0, state.plinkoInPlay - ball.bet);
+      if (ball.vip) state.plinkoVipInPlay = Math.max(0, state.plinkoVipInPlay - ball.bet);
+      else state.plinkoInPlay = Math.max(0, state.plinkoInPlay - ball.bet);
       casinoRecord(0, win + cashback);
       plinko.roundWin += win + cashback;
       plinko.history = [mult, ...plinko.history].slice(0, 14);
@@ -6045,6 +6096,151 @@
       }).join("");
     }
     setInterval(checkAchievements, 1000);
+
+    /* =====================================================================
+       ⭐ PRESTIGE: at 1 gcoin in your main money you can reset the game for a Legacy bonus.
+       Always kept: achievements, Gambler & Investor levels, cosmetics, statistics, Legacy, VIP coins.
+       Choices (each can be picked again on later prestiges):
+         tycoon  +25% income (businesses, special businesses, clicks) for every pick
+         empire  keep your trucks, tankers, cargo planes, warehouses and Trading Port this time
+         vip     VIP coins: 500 scoin every 20 min for the Super high roller tables (15, then 10 min with more picks)
+       ===================================================================== */
+    const PRESTIGE_AT = 1e12;    // 1 gcoin
+    const TYCOON_BONUS = 0.25;
+    if (!state.legacy) state.legacy = { count: 0, tycoon: 0, empire: 0, vip: 0, history: [] };
+    function legacyIncomeMult() { return 1 + TYCOON_BONUS * ((state.legacy && state.legacy.tycoon) || 0); }
+
+    const PRESTIGE_CHOICES = [
+      { id: "tycoon", icon: "💼", name: "Tycoon's Legacy", text: "+25% income from businesses, special businesses and clicks, forever.",
+        now: () => `Now: +${state.legacy.tycoon * 25}% → after: +${(state.legacy.tycoon + 1) * 25}%` },
+      { id: "empire", icon: "🚢", name: "Global Empire", text: "Keep all your trucks, oil tankers and cargo planes, plus your warehouses and Trading Port.",
+        now: () => { const n = (x, w) => `${x} ${w}${x === 1 ? "" : "s"}`; return `You'd keep ${n(logi.trucks.length, "truck")}, ${n(logi.tankers.length, "tanker")}, ${n(logi.planes.length, "plane")}`; } },
+      { id: "vip", icon: "🎟️", name: "VIP Coins", text: "500 scoin of free-bet VIP coins every 20 minutes, for the Super high roller tables. Wins become casino chips.",
+        now: () => state.legacy.vip ? `Now every ${vipMinutes()} min → after: every ${vipMinutes(state.legacy.vip + 1)} min` : "Saves up to 1,500 scoin (3 bonuses)" },
+    ];
+
+    function showPrestigeOffer() {
+      showModal(`<h2>⭐ You made it: 1 gcoin!</h2>
+        <p>You can <b>prestige</b>: start the game over and choose a permanent Legacy bonus.</p>
+        <p class="muted">Always kept: achievements, Gambler &amp; Investor levels, cosmetics and statistics${state.legacy.count ? ` · Prestiges so far: ${state.legacy.count}` : ""}.</p>
+        <div class="prestigeChoices">${PRESTIGE_CHOICES.map(c => `
+          <button class="prestigeChoice" data-prestige-pick="${c.id}">
+            <div class="big">${c.icon}</div><b>${c.name}</b>${c.text}<small>${c.now()}</small></button>`).join("")}</div>
+        <button class="btn ghost" data-prestige="later">Not yet</button>`);
+      $("modalBox").classList.add("gold");
+    }
+
+    function showPrestigeConfirm(id) {
+      const c = PRESTIGE_CHOICES.find(x => x.id === id);
+      const lost = id === "empire"
+        ? "your money, casino chips, businesses, workers, other special businesses and investments"
+        : "your money, casino chips, businesses, workers, special businesses, investments and logistics fleet";
+      showModal(`<h2>${c.icon} ${c.name}</h2>
+        <p>Are you sure? This <b>resets</b> ${lost}.</p>
+        <p class="muted">Kept: achievements, Gambler &amp; Investor levels, cosmetics, statistics, Legacy bonuses${state.legacy.vip ? ", VIP coins" : ""}.</p>
+        <p>This can't be undone.</p>
+        <button class="btn big" data-prestige="confirm" data-choice="${id}">⭐ Prestige now</button>
+        <button class="btn ghost" data-prestige="back">Back</button>`);
+      $("modalBox").classList.add("gold");
+    }
+
+    function doPrestige(id) {
+      if (state.money < PRESTIGE_AT) return;
+      const L = state.legacy;
+      L.count++; L[id] = (L[id] || 0) + 1;
+      L.history.push({ choice: id, at: Date.now() });
+      const keep = {
+        achievements: state.achievements, stats: state.stats, casinoXp: state.casinoXp, casinoStats: state.casinoStats,
+        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId,
+        vpPayHidden: state.vpPayHidden, uthPayHidden: state.uthPayHidden, view: "income",
+        invest: { xp: inv.xp, properties: [], etf: 0, etfTimer: ETF_EVERY, etfHistory: [] },
+        // all-time logistics counters are statistics: always kept
+        logistics: { tankers: [], trucks: [], planes: [], earned: logi.earned, contracts: logi.contracts || 0 },
+      };
+      if (id === "empire") {
+        keep.logistics = state.logistics;
+        keep.special = { agency: null, warehouses: state.special.warehouses, port: state.special.port };
+      }
+      stopSaving = true;
+      try { localStorage.setItem("coinClickerSave", JSON.stringify(keep)); } catch (e) {}
+      location.reload();
+    }
+
+    $("modal").addEventListener("click", (e) => {
+      const pick = e.target.closest("[data-prestige-pick]");
+      if (pick) return showPrestigeConfirm(pick.dataset.prestigePick);
+      const btn = e.target.closest("[data-prestige]");
+      if (!btn) return;
+      const a = btn.dataset.prestige;
+      if (a === "later") hideModal();
+      if (a === "back") showPrestigeOffer();
+      if (a === "confirm") doPrestige(btn.dataset.choice);
+    });
+    $("prestigeBtn").addEventListener("click", () => { if (!isPaused() && state.money >= PRESTIGE_AT) showPrestigeOffer(); });
+
+    /* ----- 🎟️ VIP coins: 500 scoin every 20 min (15, then 10 with more picks), saved up to 1,500 ----- */
+    var VIP_AMOUNT = 500 * SCOIN, VIP_MAX = 3 * VIP_AMOUNT;
+    function vipMinutes(n = state.legacy.vip) { return Math.max(10, 20 - 5 * (n - 1)); }
+    if (state.legacy.vip > 0 && !state.vip.timer) state.vip.timer = vipMinutes() * 60;
+
+    function vipCanToggle(id) {
+      if (id === "rouletteSuper") return !ROULETTE_TABLES[id].spinning && Object.keys(ROULETTE_TABLES[id].bets).length === 0;
+      if (id === "bjSuper") return BJ_TABLES[id].phase === "betting" && state.bj[id].bets.every(b => b === 0);
+      if (id === "vpSuper") return VP_TABLES[id].phase === "betting";
+      if (id === "uthSuper") return UTH_TABLES[id].phase === "betting" && uthCost(state.uth[id].seats) === 0;
+      if (id === "plinkoSuper") return plinko.balls.length === 0;
+      return false;
+    }
+    var vipReady;   // set once everything below exists (updateCounter can run earlier during start-up)
+    function updateVipBar() {
+      if (!vipReady) return;
+      const has = state.legacy.vip > 0;
+      $("vipStat").hidden = !has;
+      if (!has) { $("vipBar").hidden = true; return; }
+      $("vipCoins").textContent = fmt(state.vip.coins);
+      $("vipTimer").textContent = state.vip.coins >= VIP_MAX ? "Full (max 1,500 scoin)" : `+500 scoin in ${clock(state.vip.timer)}`;
+      const id = currentGame;
+      const show = $("casinoView").hidden === false && SUPER_TABLES.includes(id);
+      $("vipBar").hidden = !show;
+      if (!show) return;
+      const on = vipOn(id), can = vipCanToggle(id);
+      $("vipBar").innerHTML = `<div class="row">
+        <div><b>🎫 VIP coins: ${fmt(state.vip.coins)}</b>
+          <div class="muted">${on ? "Your bets at this table are paid with VIP coins. Everything you win goes to your casino chips."
+            : "Turn on to bet with your free VIP coins at this table."}${id === "uthSuper" ? " Hold'em: your VIP coins must also cover the biggest raise (4× ante)." : ""}</div></div>
+        <button class="btn ${on ? "" : "ghost"} small agentToggle ${on ? "on" : ""}" data-vip-toggle="${id}" ${can ? "" : "disabled"}
+          title="${can ? "" : "Finish the round and clear your bets to switch"}">🎫 VIP coins: ${on ? "ON" : "OFF"}</button></div>`;
+    }
+    $("vipBar").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-vip-toggle]");
+      if (!b || b.disabled || isPaused()) return;
+      const id = b.dataset.vipToggle;
+      if (!vipCanToggle(id)) return;
+      state.vipMode[id] = !state.vipMode[id];
+      updateVipBar(); renderCasino(); save();
+    });
+    setInterval(() => {
+      if (isPaused() || state.legacy.vip <= 0) return;
+      if (state.vip.coins >= VIP_MAX) { state.vip.timer = vipMinutes() * 60; }
+      else if (--state.vip.timer <= 0) {
+        state.vip.coins = Math.min(VIP_MAX, state.vip.coins + VIP_AMOUNT);
+        state.vip.timer = vipMinutes() * 60;
+        showAlert("🎫 +500 scoin VIP coins!", "Use them at any Super high roller table in the 🎰 Casino.", "good");
+      }
+      updateVipBar();
+    }, 1000);
+    vipReady = true;
+
+    // Checked every second: show the button, and the golden pop-up the first time you reach 1 gcoin
+    setInterval(() => {
+      const ready = state.money >= PRESTIGE_AT;
+      $("prestigeBtn").hidden = !ready;
+      if (ready && !state.prestigeOffered && !isPaused() && $("modal").hidden) {
+        state.prestigeOffered = true;
+        save();
+        showPrestigeOffer();
+      }
+    }, 1000);
 
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;

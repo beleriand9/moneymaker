@@ -5973,6 +5973,9 @@
       { id: "cash10s",    cat: "general", icon: "💰", name: "Multi-millionaire",  desc: "Have 10 scoin in your money (not casino chips)",  goal: 10 * SC,  get: () => state.money, money: true },
       { id: "cash100s",   cat: "general", icon: "🏦", name: "Swimming in coins",  desc: "Have 100 scoin in your money (not casino chips)", goal: 100 * SC, get: () => state.money, money: true },
       { id: "cash1g",     cat: "general", icon: "👑", name: "Billionaire",        desc: "Have 1 gcoin in your money (not casino chips)",   goal: 1e12,     get: () => state.money, money: true },
+      { id: "prestige1",  cat: "general", icon: "⭐", name: "A fresh start",      desc: "Prestige for the first time",         goal: 1, get: () => state.legacy.count },
+      { id: "prestige2",  cat: "general", icon: "🌟", name: "Second wind",        desc: "Prestige 2 times",                    goal: 2, get: () => state.legacy.count },
+      { id: "prestige4",  cat: "general", icon: "🏆", name: "Legend",             desc: "Prestige 4 times and finish the game", goal: 4, get: () => state.legacy.count },
       { id: "tax10",      cat: "general", icon: "🧾", name: "Good citizen",       desc: "Pay 10 tax bills",                    goal: 10,   get: () => state.stats.taxPaid || 0 },
       { id: "tax100",     cat: "general", icon: "🧾", name: "Model taxpayer",     desc: "Pay 100 tax bills",                   goal: 100,  get: () => state.stats.taxPaid || 0 },
       { id: "tax1000",    cat: "general", icon: "🏛️", name: "Pillar of society",  desc: "Pay 1,000 tax bills",                 goal: 1000, get: () => state.stats.taxPaid || 0 },
@@ -6106,6 +6109,8 @@
          vip     VIP coins: 500 scoin every 20 min for the Super high roller tables (15, then 10 min with more picks)
        ===================================================================== */
     const PRESTIGE_AT = 1e12;    // 1 gcoin
+    const PRESTIGE_MAX = 4;      // the 4th prestige finishes the game (you can keep playing)
+    const canPrestige = () => state.legacy.count < PRESTIGE_MAX && state.money >= PRESTIGE_AT;
     const TYCOON_BONUS = 0.25;
     if (!state.legacy) state.legacy = { count: 0, tycoon: 0, empire: 0, vip: 0, history: [] };
     function legacyIncomeMult() { return 1 + TYCOON_BONUS * ((state.legacy && state.legacy.tycoon) || 0); }
@@ -6120,8 +6125,10 @@
     ];
 
     function showPrestigeOffer() {
+      const n = state.legacy.count + 1;
       showModal(`<h2>⭐ You made it: 1 gcoin!</h2>
         <p>You can <b>prestige</b>: start the game over and choose a permanent Legacy bonus.</p>
+        <p><b style="color:#ffd34d">Prestige ${n} of ${PRESTIGE_MAX}</b>${n === PRESTIGE_MAX ? " · this is the final one: it finishes the game" : ""}</p>
         <p class="muted">Always kept: achievements, Gambler &amp; Investor levels, cosmetics and statistics${state.legacy.count ? ` · Prestiges so far: ${state.legacy.count}` : ""}.</p>
         <div class="prestigeChoices">${PRESTIGE_CHOICES.map(c => `
           <button class="prestigeChoice" data-prestige-pick="${c.id}">
@@ -6139,13 +6146,14 @@
         <p>Are you sure? This <b>resets</b> ${lost}.</p>
         <p class="muted">Kept: achievements, Gambler &amp; Investor levels, cosmetics, statistics, Legacy bonuses${state.legacy.vip ? ", VIP coins" : ""}.</p>
         <p>This can't be undone.</p>
+        ${state.legacy.count + 1 === PRESTIGE_MAX ? `<p style="color:#ffd34d"><b>This is your final prestige.</b> After it no more resets are possible, but you can keep playing.</p>` : ""}
         <button class="btn big" data-prestige="confirm" data-choice="${id}">⭐ Prestige now</button>
         <button class="btn ghost" data-prestige="back">Back</button>`);
       $("modalBox").classList.add("gold");
     }
 
     function doPrestige(id) {
-      if (state.money < PRESTIGE_AT) return;
+      if (!canPrestige()) return;
       const L = state.legacy;
       L.count++; L[id] = (L[id] || 0) + 1;
       L.history.push({ choice: id, at: Date.now() });
@@ -6176,7 +6184,7 @@
       if (a === "back") showPrestigeOffer();
       if (a === "confirm") doPrestige(btn.dataset.choice);
     });
-    $("prestigeBtn").addEventListener("click", () => { if (!isPaused() && state.money >= PRESTIGE_AT) showPrestigeOffer(); });
+    $("prestigeBtn").addEventListener("click", () => { if (!isPaused() && canPrestige()) showPrestigeOffer(); });
 
     /* ----- 🎟️ VIP coins: 500 scoin every 20 min (15, then 10 with more picks), saved up to 1,500 ----- */
     var VIP_AMOUNT = 500 * SCOIN, VIP_MAX = 3 * VIP_AMOUNT;
@@ -6233,8 +6241,20 @@
 
     // Checked every second: show the button, and the golden pop-up the first time you reach 1 gcoin
     setInterval(() => {
-      const ready = state.money >= PRESTIGE_AT;
+      const ready = canPrestige();
       $("prestigeBtn").hidden = !ready;
+      // after the final prestige: tell the player once that the game is finished
+      if (state.legacy.count >= PRESTIGE_MAX && !state.legacy.finishedShown && !isPaused() && $("modal").hidden) {
+        state.legacy.finishedShown = true;
+        save();
+        const picks = PRESTIGE_CHOICES.filter(c => state.legacy[c.id]).map(c => `${c.icon} ${c.name} ×${state.legacy[c.id]}`).join(" · ");
+        showModal(`<h2>🏆 You finished the game!</h2>
+          <p>That was your ${PRESTIGE_MAX}th and final prestige. No more resets are possible.</p>
+          <p class="muted">Your Legacy: ${picks}</p>
+          <p>You can keep playing as long as you like: collect the remaining achievements and enjoy your empire!</p>
+          <button class="btn big" data-prestige="later">Keep playing</button>`);
+        $("modalBox").classList.add("gold");
+      }
       if (ready && !state.prestigeOffered && !isPaused() && $("modal").hidden) {
         state.prestigeOffered = true;
         save();

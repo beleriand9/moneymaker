@@ -127,6 +127,7 @@
       background: linear-gradient(90deg, #7fd1ff, #b388ff);
       transition: width 0.6s ease;
     }
+    .allTime { margin-top: 6px; font-size: 14px; }
     #casinoLevel.levelUp { animation: levelGlow 1.2s ease; }
     @keyframes levelGlow { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 30px #ffd34d; } }
     .gameCard { cursor: pointer; text-align: left; width: 100%; font: inherit; color: #fff; }
@@ -682,6 +683,8 @@
           <span class="muted" id="cashbackText">Cashback 0.1% on lost bets</span></div>
         <div class="xpBar"><div class="xpFill" id="xpFill"></div></div>
         <div class="muted" id="xpText">0 / 80,000 XP</div>
+        <div class="allTime">📊 All-time earnings: <b id="casinoAllTime">0</b>
+          <span class="muted" id="casinoAllTimeBet"></span></div>
       </div>
     </div>
     <div class="card wallet">
@@ -1865,7 +1868,21 @@
     const cashbackRate = () => levelInfo(state.casinoXp).level * CASHBACK_PER_LEVEL;
     const pct = (r) => (r * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) + "%";
 
+    // All-time casino results: total bet and total paid back (wins, pushes, cashback)
+    if (!state.casinoStats) state.casinoStats = { wagered: 0, returned: 0 };
+    function casinoRecord(wagered, returned) {
+      state.casinoStats.wagered += wagered;
+      state.casinoStats.returned += returned;
+      updateCasinoLevel();
+    }
+
     function updateCasinoLevel() {
+      const st = state.casinoStats || { wagered: 0, returned: 0 };
+      const net = st.returned - st.wagered;
+      const el = $("casinoAllTime");
+      el.textContent = (net > 0 ? "+" : net < 0 ? "−" : "") + fmt(Math.abs(net));
+      el.className = net > 0 ? "up" : net < 0 ? "down" : "";
+      $("casinoAllTimeBet").textContent = st.wagered > 0 ? `· total bet ${fmt(st.wagered)}` : "";
       const info = levelInfo(state.casinoXp);
       $("levelNum").textContent = info.level;
       $("levelText").textContent = info.level + (info.max ? " (MAX)" : "");
@@ -2270,6 +2287,7 @@
         const cashback = lost * cashbackRate();
 
         state.casinoChips += back + cashback;
+        casinoRecord(bet, back + cashback);
         const levelsGained = addXp(bet);      // 1 XP per bcoin bet
         setBets(table, {});
         table.spinning = false;
@@ -3007,6 +3025,7 @@
       }
       const cashback = lost * cashbackRate();     // level cashback on lost hands
       state.casinoChips += back + cashback;
+      casinoRecord(wagered, back + cashback);
       state.bj[t.id].inPlay = 0;
       const levelsGained = addXp(wagered);         // 1 XP per bcoin bet (doubles and splits count)
 
@@ -3308,6 +3327,7 @@
       if (climb.bet < CLIMB_MIN) return climbMsg("Minimum bet is " + fmt(CLIMB_MIN) + ".");
       if (climb.bet > state.casinoChips) return climbMsg("Not enough chips. Add money to the casino first.");
       state.casinoChips -= climb.bet;
+      casinoRecord(climb.bet, 0);
       Object.assign(climb, { active: true, stake: climb.bet, step: 0, shield: false, balls: climbMachine(),
                              drawn: [], tookHalf: false, banked: 0, message: "", crashed: false, lastBet: climb.bet });
       state.climbInPlay = climb.stake;
@@ -3338,6 +3358,7 @@
           const lost = climb.stake;
           const cashback = lost * cashbackRate();
           state.casinoChips += cashback;
+          casinoRecord(0, cashback);
           climb.crashed = true;
           climb.active = false;
           state.climbInPlay = 0;
@@ -3359,6 +3380,7 @@
       if (!climb.active || climb.busy || climb.step === 0) return;
       const win = climbValue();
       state.casinoChips += win;
+      casinoRecord(0, win);
       climb.active = false;
       state.climbInPlay = 0;
       const total = win + climb.banked;
@@ -3372,6 +3394,7 @@
       if (!climb.active || climb.busy || climb.step === 0 || climb.tookHalf) return;
       const half = climbValue() / 2;
       state.casinoChips += half;
+      casinoRecord(0, half);
       climb.banked += half;
       climb.stake /= 2;               // half keeps climbing
       climb.tookHalf = true;

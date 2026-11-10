@@ -550,6 +550,8 @@
     .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin-top: 8px; }
     .agent { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
     .agent b { color: #9fe39f; }
+    .mineBar { height: 12px; background: #1c1d2b; border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
+    .mineFill { height: 100%; background: linear-gradient(90deg, #b07a00, #ffd34d); border-radius: 999px; }
     .agent.zero b { color: #9a9ab0; }
     .groupHead { background: rgba(255, 211, 77, 0.07); border-color: rgba(255, 211, 77, 0.35); padding: 10px 14px; }
 
@@ -1549,6 +1551,14 @@
         state.companies.push({ typeId: t.id, accountant: null, hr: null, workers: [], candidates: null });
       }
       if (action === "toggle") company.collapsed = !company.collapsed;
+      if (action === "buySpecial" && btn.dataset.special === "mine") {
+        if (state.special.mines.length >= MINE_MAX || state.money < MINE_PRICE || goldProfit() < MINE_UNLOCK) return;
+        state.money -= MINE_PRICE;
+        // how much gold this mine holds: random 25M - 50M (rounded to 100k)
+        const capacity = (250 + secureRandomInt(251)) * 100000;
+        state.special.mines.push({ id: state.nextId++, capacity, mined: 0 });
+        showNotice("⛏️ Gold mine bought! It holds " + fmt(capacity) + " bcoins of gold.");
+      }
       if (action === "buySpecial" && btn.dataset.special === "agency") {
         if (state.special.agency || state.money < AGENCY_PRICE || reProfit() < AGENCY_UNLOCK) return;
         state.money -= AGENCY_PRICE;
@@ -1816,7 +1826,7 @@
 
       // Special businesses
       const agencyIncome = agencyTick();
-      perSecond += agencyIncome;
+      perSecond += agencyIncome + mineTick();
 
       state.money = Math.max(0, state.money + perSecond);
 
@@ -3719,6 +3729,77 @@
       return income;
     }
 
+    /* ----- ⛏️ Gold mine: needs 500k all-time gold profit, costs 5M, up to 2 at once.
+       Each mine holds a random 25M - 50M of gold and pays a fixed 250 per second until it is empty. ----- */
+    const MINE_PRICE = 5000000;
+    const MINE_UNLOCK = 500000;
+    const MINE_MAX = 2;
+    const MINE_INCOME = 250;
+    if (!state.special.mines) state.special.mines = [];
+
+    function goldProfit() {
+      const st = state.invest && state.invest.stats && state.invest.stats.gold;
+      if (!st) return 0;
+      return st.out + (state.invest.gold || 0) - st.in;
+    }
+
+    let mineWasUnlocked = null;
+    function mineTick() {
+      const unlocked = goldProfit() >= MINE_UNLOCK;
+      if (unlocked !== mineWasUnlocked) { mineWasUnlocked = unlocked; render(); }
+
+      let income = 0, emptied = false;
+      for (const m of state.special.mines) {
+        let pay = MINE_INCOME * (state.influenceLeft > 0 ? 2 : 1);   // political influence doubles it
+        pay = Math.min(pay, m.capacity - m.mined);                    // the last bit of gold
+        m.mined += pay;
+        income += pay;
+        if (m.mined >= m.capacity) emptied = true;
+        const bar = $("mine-fill-" + m.id), txt = $("mine-text-" + m.id);
+        if (bar) bar.style.width = (100 * m.mined / m.capacity) + "%";
+        if (txt) txt.textContent = mineText(m);
+      }
+      if (emptied) {
+        state.special.mines = state.special.mines.filter(m => m.mined < m.capacity);
+        showNotice("⛏️ A gold mine ran out of gold and closed. You can buy a new one.");
+        render();
+      }
+      return income;
+    }
+
+    function mineText(m) {
+      const left = m.capacity - m.mined;
+      const secs = Math.ceil(left / MINE_INCOME);
+      const h = Math.floor(secs / 3600), min = Math.floor((secs % 3600) / 60);
+      return `Mined ${fmt(m.mined)} of ${fmt(m.capacity)} · ${fmt(left)} left (about ${h}h ${min}m)`;
+    }
+
+    function renderMines() {
+      const mines = state.special.mines;
+      const profit = goldProfit();
+      let html = "";
+      mines.forEach((m, i) => {
+        html += `<div class="card specialCard">
+          <div class="row"><h3>⛏️ Gold Mine ${mines.length > 1 ? "#" + (i + 1) : ""}</h3><span class="income">+${MINE_INCOME} / sec</span></div>
+          <div class="mineBar"><div class="mineFill" id="mine-fill-${m.id}" style="width:${100 * m.mined / m.capacity}%"></div></div>
+          <div class="muted" id="mine-text-${m.id}">${mineText(m)}</div>
+        </div>`;
+      });
+      if (mines.length < MINE_MAX) {
+        const desc = `<div class="muted">Fixed income of ${MINE_INCOME} / sec · each mine holds a random 25M – 50M of gold, then closes</div>
+                      <div class="muted">Owned: ${mines.length} / ${MINE_MAX}</div>`;
+        if (profit >= MINE_UNLOCK) {
+          html += `<div class="card specialCard"><div class="row"><div><h3>⛏️ Gold Mine</h3>${desc}</div>
+            <button class="btn" data-action="buySpecial" data-special="mine" data-cost="${MINE_PRICE}">Buy ${fmt(MINE_PRICE)}</button></div></div>`;
+        } else {
+          html += `<div class="card specialCard" style="opacity:0.6"><div class="row"><div><h3>🔒 ⛏️ Gold Mine</h3>${desc}
+            <div class="muted">Unlocks at 500,000 all-time gold profit (now ${profit >= 0 ? "" : "−"}${fmt(Math.abs(profit))}, see 📈 Investing)</div></div>
+            <span class="muted">${fmt(MINE_PRICE)}</span></div></div>`;
+        }
+      }
+      return html;
+    }
+
     function renderSpecialBusinesses() {
       const ag = state.special.agency;
       const profit = reProfit();
@@ -3753,7 +3834,7 @@
           <span class="muted">${fmt(AGENCY_PRICE)}</span>
         </div></div>`;
       }
-      return html;
+      return html + renderMines();
     }
 
     // Make the game state reachable from the browser console (F12) for testing

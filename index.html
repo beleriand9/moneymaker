@@ -1147,10 +1147,10 @@
       return list;
     }
 
-    // 10, then 20, then 30... grows with every refresh
+    // New candidates cost the same as hiring the next worker (Talent specialist discount included).
+    // The price does not go up when you refresh.
     function refreshCost(company) {
-      const t = typeOf(company);
-      return applyTalentDiscount(company, t.refreshBaseCost + t.refreshCostStep * (company.refreshes || 0));
+      return hireCost(company);
     }
 
     // Talent acquisition specialist: hiring and refreshing cost 30% less
@@ -1538,7 +1538,6 @@
         const cost = refreshCost(company);
         if (state.money < cost) return;
         state.money -= cost;
-        company.refreshes = (company.refreshes || 0) + 1;   // next refresh costs 10 more
         company.candidates = makeCandidates(company);
       }
 

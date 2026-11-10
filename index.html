@@ -992,9 +992,10 @@
     };
 
     const HR_OPTIONS = {
-      motivator:  { name: "Motivator",         emoji: "📣", desc: "All workers earn +10%" },
+      motivator:  { name: "Motivator",         emoji: "📣", desc: "All workers earn +15%" },
       friendship: { name: "Friendship expert", emoji: "💞", desc: "Candidates are twice as likely to have the Friendship trait" },
-      talent:     { name: "Talent acquisition specialist", emoji: "🎯", desc: "Hiring workers and refreshing options cost 30% less" },
+      talent:     { name: "Talent acquisition specialist", emoji: "🎯", desc: "Hiring workers and refreshing options cost 30% less. Company profit +5% when every worker spot is filled" },
+      schedule:   { name: "Schedule specialist", emoji: "🗓️", desc: "Night owls and morning people earn ×3 (instead of ×2) in their good 10 seconds" },
     };
 
     // chance = how likely a new candidate gets this trait
@@ -1005,6 +1006,9 @@
       lazy:       { name: "Lazy",        emoji: "😴", chance: 0.16, desc: "30% chance to earn nothing each second" },
       bully:      { name: "Bully",       emoji: "😠", chance: 0.12, desc: "Earns double, but one random co-worker earns nothing" },
       nightowl:   { name: "Night owl",   emoji: "🦉", chance: 0.12, desc: "10 seconds double income, then 10 seconds half income" },
+      morning:    { name: "Morning person", emoji: "☀️", chance: 0.12, desc: "10 seconds double income, then 10 seconds half income" },
+      // Very rare: rolled separately with a fixed 1 in 100 chance (see rollTrait)
+      legend:     { name: "The Legend",  emoji: "🏆", chance: 0, desc: "Every worker in the company earns +1 per second (stacks)" },
       hardworker: { name: "Hard worker", emoji: "💪", chance: 0.12, desc: "Earns +50%, but sometimes burns out for 10 seconds" },
       mentor:     { name: "Mentor",      emoji: "🧑‍🏫", chance: 0.08, desc: "The lowest-earning co-worker earns double" },
       copycat:    { name: "Copycat",     emoji: "🔁", chance: 0.06, desc: "Copies the trait of a random co-worker every 20 seconds" },
@@ -1104,7 +1108,11 @@
 
     // Pick a random trait using each trait's chance.
     // The Friendship expert doubles the Friendship chance; other traits shrink to make room.
+    const LEGEND_CHANCE = 1 / 100;
     function rollTrait(company) {
+      // The Legend: always exactly 1 in 100, in every business
+      if (Math.random() < LEGEND_CHANCE) return "legend";
+
       // Only traits this business can have, scaled so the chances add up to 1
       const chances = {};
       for (const key in TRAITS) {
@@ -1200,15 +1208,18 @@
       const status = workers.map(() => "");
       const friendCount = traits.filter(t => t === "friendship").length;
       const owlDay = Math.floor((tick - 1) / NIGHT_OWL_PHASE) % 2 === 0;  // true = double phase
+      const goodPhase = company.hr === "schedule" ? 3 : 2;   // Schedule specialist makes the good phase ×3
+      const legends = traits.filter(t => t === "legend").length;     // each Legend: +1 for every worker
 
       const earn = workers.map((w, i) => {
         const t = traits[i];
-        let v = w.base;
-        if (company.hr === "motivator") v *= 1.10;
+        let v = w.base + legends;
+        if (company.hr === "motivator") v *= 1.15;
         if (t === "friendship") v *= 1 + 0.20 * friendCount;
         if (t === "bully") v *= 2;
         if (t === "hardworker") v *= 1 + HARD_WORKER_BONUS;
-        if (t === "nightowl") { v *= owlDay ? 2 : 0.5; status[i] = owlDay ? "🦉 awake" : "🦉 sleepy"; }
+        if (t === "nightowl") { v *= owlDay ? goodPhase : 0.5; status[i] = owlDay ? "🦉 awake" : "🦉 sleepy"; }
+        if (t === "morning")  { v *= owlDay ? goodPhase : 0.5; status[i] = owlDay ? "☀️ awake" : "☀️ sleepy"; }
         if (t === "mechanic") v *= 1 + 0.10 * state.companies.filter(c => c.typeId === "carwash").length;
         if (t === "overcharger") v *= 1.80;
         w.age = (w.age || 0) + 1;   // seconds this worker has worked
@@ -1334,6 +1345,9 @@
         total -= stolen;
         result.flash = "🦹 The embezzler stole " + fmt(stolen) + "!";
       }
+
+      // Talent acquisition specialist: +5% when every worker spot is filled
+      if (company.hr === "talent" && workers.length >= maxWorkers(company)) total *= 1.05;
 
       // Political influence doubles all business income
       if (state.influenceLeft > 0) total *= 2;

@@ -198,6 +198,7 @@
     .subTab.active { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
     .subMain > div > .card:first-child { margin-top: 0; }
     #investPane[hidden], #livePane[hidden] { display: none; }
+    .cardMsg { margin-top: 8px; min-height: 0; font-weight: 700; }
     @media (max-width: 760px) {
       .subLayout { grid-template-columns: 1fr; }
       .subNav { position: static; flex-direction: row; }
@@ -1212,7 +1213,8 @@
                 <button class="btn ghost small" data-invpct="re" data-pct="1">All</button>
                 <button class="btn" id="reBuy">Buy property</button>
               </div>
-              <div id="reList" style="margin-top:10px"></div>
+              <div class="cardMsg" id="msg-re"></div>
+<div id="reList" style="margin-top:10px"></div>
             </div>
 
             <!-- ETF -->
@@ -1244,6 +1246,7 @@
                 <button class="btn ghost" id="etfSellAll">Cash out all</button>
                 <span class="muted" id="etfSellPreview"></span>
               </div>
+<div class="cardMsg" id="msg-etf"></div>
             </div>
 
             <!-- Gold -->
@@ -1273,6 +1276,7 @@
                 <button class="btn ghost" id="goldSellAll">Cash out all (no fee)</button>
                 <span class="muted" id="goldCooldown"></span>
               </div>
+<div class="cardMsg" id="msg-gold"></div>
             </div>
 
             <!-- Broker ETF (needs a Brokerage Firm) -->
@@ -1304,6 +1308,7 @@
                   <button class="btn ghost" id="petfSell">Cash out all (no fee)</button>
                   <span class="muted">One slot: cash out to invest again.</span>
                 </div>
+<div class="cardMsg" id="msg-petf"></div>
               </div>
             </div>
         </div>
@@ -3124,9 +3129,11 @@
     const RE_LEVEL_BONUS = 0.001;   // +0.1% on property sales per investor level
     const etfFee = () => Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (investLevel() - 1));
 
-    function investMessage(text, good) {
-      $("investMsg").textContent = text;
-      $("investMsg").className = good ? "income" : "flash";
+    // Shows a message in the card it belongs to (re / etf / gold / petf), or in the general line above
+    function investMessage(text, good, area) {
+      const el = (area && $("msg-" + area)) || $("investMsg");
+      el.textContent = text;
+      el.className = (area ? "cardMsg " : "") + (good ? "income" : "flash");
     }
 
     function updateInvestLevel() {
@@ -3187,13 +3194,13 @@
     $("reBuy").addEventListener("click", () => {
       if (isPaused()) return;
       const amount = readAmount("reAmount");
-      if (amount < RE_MIN) return investMessage("Real estate needs at least " + fmt(RE_MIN) + ".");
-      if (amount > state.money) return investMessage("You don't have that much money.");
+      if (amount < RE_MIN) return investMessage("Real estate needs at least " + fmt(RE_MIN) + ".", false, "re");
+      if (amount > state.money) return investMessage("You don't have that much money.", false, "re");
       state.money -= amount;
       inv.properties.push({ id: state.nextId++, value: amount, lock: RE_LOCK, rentIn: RE_RENT_EVERY });
       investRecord("re", amount, 0);
       $("reAmount").value = "";
-      investMessage("🏠 Bought a property for " + fmt(amount) + ".", true);
+      investMessage("🏠 Bought a property for " + fmt(amount) + ".", true, "re");
       renderProperties(); updateCounter(); updateInvestLive(); save();
     });
 
@@ -3230,7 +3237,7 @@
         investRecord("re", 0, bonus);
         bonusText += ` ⚖️ Real estate lawyer${reLawyers > 1 ? "s" : ""} +${fmt(bonus)}.`;
       }
-      investMessage("Sold a property for " + fmt(p.value) + "." + bonusText, true);
+      investMessage("Sold a property for " + fmt(p.value) + "." + bonusText, true, "re");
       renderProperties(); updateCounter(); updateInvestLive(); save();
     });
 
@@ -3265,21 +3272,21 @@
     $("etfBuy").addEventListener("click", () => {
       if (isPaused()) return;
       const amount = readAmount("etfAmount");
-      if (amount < ETF_MIN) return investMessage("The ETF needs at least " + fmt(ETF_MIN) + " per investment.");
-      if (amount > state.money) return investMessage("You don't have that much money.");
+      if (amount < ETF_MIN) return investMessage("The ETF needs at least " + fmt(ETF_MIN) + " per investment.", false, "etf");
+      if (amount > state.money) return investMessage("You don't have that much money.", false, "etf");
       state.money -= amount;
       inv.etf += amount;
       inv.etfInvested += amount;
       investRecord("etf", amount, 0);
       $("etfAmount").value = "";
-      investMessage("📊 Invested " + fmt(amount) + " in the ETF.", true);
+      investMessage("📊 Invested " + fmt(amount) + " in the ETF.", true, "etf");
       updateCounter(); updateInvestLive(); save();
     });
 
     function cashOutEtf(amount) {
       if (isPaused()) return;
       amount = Math.min(amount, inv.etf);
-      if (amount <= 0) return investMessage("Nothing to cash out.");
+      if (amount <= 0) return investMessage("Nothing to cash out.", false, "etf");
       const fee = amount * etfFee();
       inv.etfInvested *= 1 - amount / inv.etf;   // cashing out part also takes out that part of what you invested
       inv.etf -= amount;
@@ -3287,7 +3294,7 @@
       state.money += amount - fee;
       investRecord("etf", 0, amount - fee);
       $("etfSellAmount").value = "";
-      investMessage(`Cashed out ${fmt(amount)} (fee ${fmt(fee)}): +${fmt(amount - fee)} to your money.`, true);
+      investMessage(`Cashed out ${fmt(amount)} (fee ${fmt(fee)}): +${fmt(amount - fee)} to your money.`, true, "etf");
       updateCounter(); updateInvestLive(); save();
     }
     $("etfSell").addEventListener("click", () => cashOutEtf(readAmount("etfSellAmount")));
@@ -3309,14 +3316,14 @@
     $("goldBuy").addEventListener("click", () => {
       if (isPaused()) return;
       const amount = readAmount("goldAmount");
-      if (amount < ETF_MIN) return investMessage("Gold needs at least " + fmt(ETF_MIN) + ".");
-      if (amount > state.money) return investMessage("You don't have that much money.");
+      if (amount < ETF_MIN) return investMessage("Gold needs at least " + fmt(ETF_MIN) + ".", false, "gold");
+      if (amount > state.money) return investMessage("You don't have that much money.", false, "gold");
       state.money -= amount;
       inv.gold += amount;
       inv.goldInvested += amount;
       investRecord("gold", amount, 0);
       $("goldAmount").value = "";
-      investMessage("🪙 Bought " + fmt(amount) + " of gold.", true);
+      investMessage("🪙 Bought " + fmt(amount) + " of gold.", true, "gold");
       updateCounter(); updateInvestLive(); save();
     });
 
@@ -3325,9 +3332,9 @@
 
     function cashOutGold(amount) {
       if (isPaused()) return;
-      if (inv.goldCooldown > 0) return investMessage("⏳ You can sell gold again in " + clock(inv.goldCooldown) + ".");
+      if (inv.goldCooldown > 0) return investMessage("⏳ You can sell gold again in " + clock(inv.goldCooldown) + ".", false, "gold");
       amount = Math.min(amount, inv.gold);
-      if (amount <= 0) return investMessage("No gold to cash out.");
+      if (amount <= 0) return investMessage("No gold to cash out.", false, "gold");
       inv.goldCooldown = GOLD_SELL_COOLDOWN;
       inv.goldInvested *= 1 - amount / inv.gold;
       inv.gold -= amount;
@@ -3335,7 +3342,7 @@
       state.money += amount;
       investRecord("gold", 0, amount);
       $("goldSellAmount").value = "";
-      investMessage("🪙 Sold " + fmt(amount) + " of gold (no fee).", true);
+      investMessage("🪙 Sold " + fmt(amount) + " of gold (no fee).", true, "gold");
       updateCounter(); updateInvestLive(); save();
     }
     $("goldSell").addEventListener("click", () => cashOutGold(readAmount("goldSellAmount")));
@@ -3353,18 +3360,18 @@
 
     $("petfBuy").addEventListener("click", () => {
       if (isPaused() || !hasBroker()) return;
-      if (inv.petf > 0) return investMessage("The Broker ETF has one slot. Cash out first to invest again.");
+      if (inv.petf > 0) return investMessage("The Broker ETF has one slot. Cash out first to invest again.", false, "petf");
       const amount = readAmount("petfAmount");
-      if (amount < ETF_MIN) return investMessage("The Broker ETF needs at least " + fmt(ETF_MIN) + ".");
-      if (amount > PETF_MAX) return investMessage("The Broker ETF accepts at most " + fmt(PETF_MAX) + ".");
-      if (amount > state.money) return investMessage("You don't have that much money.");
+      if (amount < ETF_MIN) return investMessage("The Broker ETF needs at least " + fmt(ETF_MIN) + ".", false, "petf");
+      if (amount > PETF_MAX) return investMessage("The Broker ETF accepts at most " + fmt(PETF_MAX) + ".", false, "petf");
+      if (amount > state.money) return investMessage("You don't have that much money.", false, "petf");
       state.money -= amount;
       inv.petf = amount;
       inv.petfInvested = amount;
       investRecord("petf", amount, 0);
       inv.petfTimer = ETF_EVERY;
       $("petfAmount").value = "";
-      investMessage("🏦 Invested " + fmt(amount) + " in the Broker ETF.", true);
+      investMessage("🏦 Invested " + fmt(amount) + " in the Broker ETF.", true, "petf");
       updateCounter(); updateInvestLive(); save();
     });
 
@@ -3375,7 +3382,7 @@
       investRecord("petf", 0, amount);
       inv.petf = 0;
       inv.petfInvested = 0;
-      investMessage("🏦 Cashed out " + fmt(amount) + " from the Broker ETF (no fee).", true);
+      investMessage("🏦 Cashed out " + fmt(amount) + " from the Broker ETF (no fee).", true, "petf");
       updateCounter(); updateInvestLive(); save();
     });
 
@@ -3503,7 +3510,7 @@
       if (inv.properties.length > 0 && Math.random() < RE_CRASH_CHANCE) {
         let lost = 0;
         inv.properties.forEach(p => { lost += p.value * RE_CRASH_LOSS; p.value *= 1 - RE_CRASH_LOSS; });
-        investMessage("🏚️ REAL ESTATE CRASH! Your properties lost " + fmt(lost) + " (70%).");
+        investMessage("🏚️ REAL ESTATE CRASH! Your properties lost " + fmt(lost) + " (70%).", false, "re");
         state.stats.reCrash = true;
         showNotice("🏚️ Real estate crash! Properties lost 70% of their value.");
         changed = true;
@@ -3518,7 +3525,7 @@
           p.rentIn = RE_RENT_EVERY;
         }
       });
-      if (rent > 0) { state.money += rent; investRecord("re", 0, rent); investMessage("🏠 Rent paid: +" + fmt(rent), true); }
+      if (rent > 0) { state.money += rent; investRecord("re", 0, rent); investMessage("🏠 Rent paid: +" + fmt(rent), true, "re"); }
 
       // ETF market move (the market always moves; your money follows it if invested)
       inv.etfTimer--;

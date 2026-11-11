@@ -295,6 +295,14 @@
     .ach .bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.1); margin-top: 6px; overflow: hidden; }
     .ach .bar div { height: 100%; background: linear-gradient(90deg, #6ec6ff, #b388ff); }
     #modalBox.wide { max-width: 760px; width: 92vw; border-color: #6ec6ff; box-shadow: 0 0 40px rgba(110, 198, 255, 0.35); }
+    .freeLine { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+    .freeItem { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 2px; border-radius: 999px; background: rgba(255,255,255,0.06); }
+    .freeItem .chipMark { width: 26px; height: 26px; font-size: 8px; }
+    .freeItem small { color: #8fd3ff; }
+    .freeItem.vip { box-shadow: 0 0 0 1px #ffd34d; }
+    .chip.free { position: relative; box-shadow: 0 0 0 3px #b388ff; }
+    .chip.free i { position: absolute; bottom: -6px; right: -8px; font-style: normal; font-size: 10px; background: #b388ff; color: #1a1030; border-radius: 999px; padding: 0 4px; }
+    .freeRow { margin-top: 0; }
     .levelTableWrap { max-height: 55vh; overflow-y: auto; margin: 12px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
     .levelTable { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
     .levelTable th { position: sticky; top: 0; background: #23253a; padding: 6px 10px; }
@@ -961,6 +969,7 @@
           <span class="muted" id="cashbackText">Cashback 0.1% on lost bets</span></div>
         <div class="xpBar"><div class="xpFill" id="xpFill"></div></div>
         <div class="muted" id="xpText">0 / 80,000 XP</div>
+        <div class="freeLine" id="freeChipsLine"></div>
         <div class="allTime">📊 All-time earnings: <b id="casinoAllTime">0</b>
           <span class="muted" id="casinoAllTimeBet"></span></div>
       </div>
@@ -2334,7 +2343,30 @@
     if (!state.vipMode) state.vipMode = {};
     if (typeof state.plinkoVipInPlay !== "number") state.plinkoVipInPlay = 0;
     const SUPER_TABLES = ["rouletteSuper", "bjSuper", "plinkoSuper", "vpSuper", "uthSuper"];
-    const vipOn = (id) => state.legacy.vip > 0 && !!state.vipMode[id] && SUPER_TABLES.includes(id);
+    const vipOn = (id) => false;   // VIP coins are now 500 scoin free bet chips (see FREE BET CHIPS)
+
+    /* ----- 🎁 Free bet chips: chips you own, kept apart from casino chips. Placed on a table they are a normal bet;
+       what the round pays goes to casino chips. Unplayed ones (cleared bets, reloads) go back to the inventory. ----- */
+    if (!state.freeChips) state.freeChips = {};      // chip value -> how many you have
+    if (!state.freeTimers) state.freeTimers = {};    // chip value -> seconds until the next one
+    if (!state.freeTable) state.freeTable = {};      // table id -> { placed: [values on the table], inPlay: [values in a round] }
+    const sumOf = (arr) => arr.reduce((a, b) => a + b, 0);
+    const freeTbl = (id) => state.freeTable[id] || (state.freeTable[id] = { placed: [], inPlay: [] });
+    const freePlacedSum = (id) => sumOf(freeTbl(id).placed);
+    function freeTake(id, value, n = 1) {             // take n chips from the inventory onto a table
+      if ((state.freeChips[value] || 0) < n) return false;
+      state.freeChips[value] -= n;
+      for (let i = 0; i < n; i++) freeTbl(id).placed.push(value);
+      return true;
+    }
+    function freeReturn(id, which = "placed") {       // give chips back to the inventory; returns their total
+      const list = freeTbl(id)[which], total = sumOf(list);
+      list.forEach(v => state.freeChips[v] = (state.freeChips[v] || 0) + 1);
+      freeTbl(id)[which] = [];
+      return total;
+    }
+    function freeStart(id) { const f = freeTbl(id); f.inPlay = f.placed; f.placed = []; return sumOf(f.inPlay); }
+    function freeDone(id, which = "inPlay") { freeTbl(id)[which] = []; }   // played: they are used up
     const purse = (id) => vipOn(id) ? state.vip.coins : state.casinoChips;
     const purseName = (id) => vipOn(id) ? "VIP coins" : "chips";
     function payFrom(id, x) { if (vipOn(id)) state.vip.coins -= x; else state.casinoChips -= x; }
@@ -2634,6 +2666,7 @@
       1000:   { bg: "#00acc1", text: "#fff" },      // cyan
       5000:   { bg: "#fb8c00", text: "#fff" },      // orange
       10000:  { bg: "#1e88e5", text: "#fff" },      // blue
+      1000000: { bg: "#2e7d32", text: "#fff" },     // green     (1 scoin)
       25000:  { bg: "#6d4c41", text: "#fff" },      // brown
       50000:  { bg: "#ec407a", text: "#fff" },      // pink
       100000: { bg: "#37474f", text: "#ffd34d" },   // dark grey, gold text
@@ -2737,9 +2770,10 @@
 
           <div class="chipsRow">
             <span class="muted">Chip:</span>
-            ${roulette.chips.map(v => `<button class="chip ${v === roulette.chip ? "selected" : ""}" data-chip="${v}"
+            ${roulette.chips.map(v => `<button class="chip ${v === roulette.chip && !roulette.chipFree ? "selected" : ""}" data-chip="${v}"
                  style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
           </div>
+          ${freeChipRow(roulette, roulette.chipFree)}
 
           <div id="tableWrap"><div id="table">${table}</div></div>
 
@@ -2760,15 +2794,19 @@
       if (isPaused()) return;
 
       const chip = e.target.closest("[data-chip]");
-      if (chip && !roulette.spinning) { roulette.chip = Number(chip.dataset.chip); renderRoulette(); return; }
+      if (chip && !roulette.spinning) { roulette.chip = Number(chip.dataset.chip); roulette.chipFree = false; renderRoulette(); return; }
+      const fchip = e.target.closest("[data-freechip]");
+      if (fchip && !roulette.spinning) { roulette.chip = Number(fchip.dataset.freechip); roulette.chipFree = true; renderRoulette(); return; }
 
       const betCell = e.target.closest("[data-bet]");
       if (betCell && !roulette.spinning) {
-        if (purse(roulette.id) < roulette.chip) return casinoMessage(`Not enough ${purseName(roulette.id)}.`);
+        const free = roulette.chipFree;
+        if (free && !(state.freeChips[roulette.chip] > 0)) { roulette.chipFree = false; renderRoulette(); return casinoMessage("No free chips of that kind left."); }
+        if (!free && purse(roulette.id) < roulette.chip) return casinoMessage(`Not enough ${purseName(roulette.id)}.`);
         const key = betCell.dataset.bet;
         if ((roulette.bets[key] || 0) + roulette.chip > roulette.max)
           return casinoMessage("Table limit: max " + fmt(roulette.max) + " on one spot.");
-        payFrom(roulette.id, roulette.chip);
+        if (free) freeTake(roulette.id, roulette.chip); else payFrom(roulette.id, roulette.chip);
         roulette.bets[key] = (roulette.bets[key] || 0) + roulette.chip;
         roulette.lastResult = null;
         updateCounter(); renderRoulette(); save();
@@ -2776,7 +2814,7 @@
       }
 
       if (e.target.closest("#clearBets") && !roulette.spinning) {
-        refundTo(roulette.id, totalBets());   // give the chips back
+        refundTo(roulette.id, totalBets() - freeReturn(roulette.id));   // give the chips back (free chips to your free chips)
         setBets(roulette, {});
         updateCounter(); renderRoulette(); save();
         return;
@@ -2921,6 +2959,7 @@
         if ((table.bets.red || 0) >= 500000000 || (table.bets.black || 0) >= 500000000) state.stats.redBlack500 = true;
         const levelsGained = addXp(bet);      // XP = bet × game multiplier
         setBets(table, {});
+        freeDone(table.id, "placed");          // free chips on the table were played
         table.spinning = false;
         table.lastResult = result;
         table.history = [result, ...table.history].slice(0, 12);
@@ -3596,7 +3635,8 @@
     if (!state.bj) state.bj = {};
     for (const id in BJ_TABLES) {
       const saved = state.bj[id] || {};
-      if (saved.inPlay > 0) refundTo(id, saved.inPlay);
+      if (saved.inPlay > 0) refundTo(id, Math.max(0, saved.inPlay - freeReturn(id, "inPlay")));
+      else freeReturn(id, "inPlay");
       state.bj[id] = { bets: saved.bets || [0, 0, 0], inPlay: 0 };
     }
     const seatBets = (t) => state.bj[t.id].bets;
@@ -3642,7 +3682,8 @@
       t.phase = "dealing";
       t.lastBets = [...bets];
       t.message = "";
-      state.bj[t.id].inPlay = bets.reduce((a, b) => a + b, 0);
+      state.bj[t.id].inPlay = bets.reduce((a, b) => a + b, 0);   // free chips included; on a reload they go back as free chips
+      freeStart(t.id);
       t.hands = [];
       bets.forEach((b, seat) => { if (b > 0) t.hands.push({ seat, bet: b, cards: [], done: false, result: null }); });
       if (bets.some(b => b >= 500000000)) state.stats.bj500 = true;
@@ -3817,6 +3858,7 @@
       state.casinoChips += back + cashback;
       casinoRecord(wagered, back + cashback);
       state.bj[t.id].inPlay = 0;
+      freeDone(t.id);
       const levelsGained = addXp(wagered);         // XP = bet × game multiplier (doubles and splits count)
 
       const net = back - wagered;
@@ -3919,10 +3961,11 @@
 
           <div class="chipsRow">
             <span class="muted">Chip:</span>
-            ${t.chips.map(v => `<button class="chip ${v === t.chip ? "selected" : ""}" data-bjchip="${v}"
+            ${t.chips.map(v => `<button class="chip ${v === t.chip && !t.chipFree ? "selected" : ""}" data-bjchip="${v}"
                  style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
             <span class="muted">Click a seat to add the chip. Play up to 3 seats.</span>
           </div>
+          ${freeChipRow(t, t.chipFree)}
           <div class="bjActions">${actions}</div>
           <div id="casinoMsg" class="${/won|money back/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
           <div class="muted" style="margin-top:6px; text-align:center">Double on any first two cards · Split once per seat (split aces get one card) · Surrender a first-two-card hand for half your bet back · Insurance pays 2:1 when the dealer shows an Ace</div>
@@ -3939,7 +3982,9 @@
       const t = bj;
 
       const chip = e.target.closest("[data-bjchip]");
-      if (chip) { t.chip = Number(chip.dataset.bjchip); renderBlackjack(); return; }
+      if (chip) { t.chip = Number(chip.dataset.bjchip); t.chipFree = false; renderBlackjack(); return; }
+      const fchip = e.target.closest("[data-freechip]");
+      if (fchip) { t.chip = Number(fchip.dataset.freechip); t.chipFree = true; renderBlackjack(); return; }
 
       const seat = e.target.closest("[data-seat]");
       if (seat && t.phase === "betting" && !t.busy) {
@@ -3947,8 +3992,12 @@
         const bets = seatBets(t);
         if (bets.every(b => b === 0)) { t.hands = []; t.dealer = []; }   // clear the last round from the table
         if (bets[i] + t.chip > t.max) return bjMsg("Table limit: max " + fmt(t.max) + " per hand.");
-        if (purse(t.id) < t.chip) return bjMsg(`Not enough ${purseName(t.id)}.`);
-        payFrom(t.id, t.chip);
+        if (t.chipFree) {
+          if (!freeTake(t.id, t.chip)) { t.chipFree = false; renderBlackjack(); return bjMsg("No free chips of that kind left."); }
+        } else {
+          if (purse(t.id) < t.chip) return bjMsg(`Not enough ${purseName(t.id)}.`);
+          payFrom(t.id, t.chip);
+        }
         bets[i] += t.chip;
         t.message = "";
         updateCounter(); renderBlackjack(); save();
@@ -3961,7 +4010,7 @@
       if (a === "deal") bjDeal();
       if (a === "clear") {
         const bets = seatBets(t);
-        refundTo(t.id, bets.reduce((x, y) => x + y, 0));
+        refundTo(t.id, bets.reduce((x, y) => x + y, 0) - freeReturn(t.id));
         state.bj[t.id].bets = [0, 0, 0];
         updateCounter(); renderBlackjack(); save();
       }
@@ -4070,7 +4119,8 @@
     if (!state.vp) state.vp = {};
     for (const id in VP_TABLES) {
       const saved = state.vp[id] || {};
-      if (saved.inPlay > 0) refundTo(id, saved.inPlay);
+      if (saved.inPlay > 0) refundTo(id, Math.max(0, saved.inPlay - freeReturn(id, "inPlay")));
+      else freeReturn(id, "inPlay");
       state.vp[id] = { bet: saved.bet || 0, lastBet: saved.lastBet || 0, inPlay: 0 };
     }
     const vpBet = (t) => state.vp[t.id].bet;
@@ -4087,8 +4137,11 @@
     async function vpDeal() {
       const t = vp, bet = vpBet(t);
       if (bet < t.min || bet > t.max) return vpMsg(`Bet must be between ${fmt(t.min)} and ${fmt(t.max)}.`);
-      if (purse(t.id) < bet) return vpMsg(`Not enough ${purseName(t.id)}.`);
-      payFrom(t.id, bet);
+      const freePart = freePlacedSum(t.id);   // free chips in the bet are already off your inventory
+      if (purse(t.id) < bet - freePart) return vpMsg(`Not enough ${purseName(t.id)}.`);
+      payFrom(t.id, bet - freePart);
+      freeStart(t.id);
+      t.freeUsed = freePart;
       state.vp[t.id].inPlay = bet;
       if (bet >= 500000000) state.stats.vp500 = true;
       countPlay("vp");
@@ -4120,6 +4173,9 @@
       state.casinoChips += back + jackpot + cashback;
       casinoRecord(bet, back + jackpot + cashback);
       state.vp[t.id].inPlay = 0;
+      freeDone(t.id);
+      state.vp[t.id].bet = Math.max(0, state.vp[t.id].bet - (t.freeUsed || 0));   // the free chips were used: they leave the bet
+      t.freeUsed = 0;
       const levelsGained = addXp(bet);   // XP = bet × game multiplier
 
       t.result = cat;
@@ -4224,7 +4280,7 @@
             ${t.chips.map(v => `<button class="chip" data-vpchip="${v}"
                  style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
             <span class="muted">Click chips to add to your bet (${fmt(t.min)} – ${fmt(t.max)}).</span>
-          </div>`}
+          </div>${freeChipRow(t, false)}`}
           <div id="casinoMsg" class="${/won|back|JACKPOT/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
           <div class="muted" style="margin-top:6px; text-align:center">The joker is wild and becomes the best card for your hand · "1×" means you get your bet back · Returns about 98% with perfect play</div>
         </div>`;
@@ -4241,6 +4297,15 @@
         renderVideoPoker();
         return;
       }
+      const fchip = e.target.closest("[data-freechip]");
+      if (fchip && t.phase === "betting" && !t.busy) {
+        const v = Number(fchip.dataset.freechip), cur = state.vp[t.id];
+        if (cur.bet + v > t.max) return vpMsg("Maximum bet is " + fmt(t.max) + ".");
+        if (!freeTake(t.id, v)) return vpMsg("No free chips of that kind left.");
+        cur.bet += v; t.message = "";
+        renderVideoPoker(); save();
+        return;
+      }
       const chip = e.target.closest("[data-vpchip]");
       if (chip && t.phase === "betting" && !t.busy) {
         const v = Number(chip.dataset.vpchip), cur = state.vp[t.id];
@@ -4255,7 +4320,7 @@
       if (a === "deal" && !t.busy) vpDeal();
       if (a === "draw" && t.phase === "holding" && !t.busy) vpDraw();
       if (a === "max") { state.vp[t.id].bet = t.max; t.message = ""; renderVideoPoker(); save(); }
-      if (a === "clear") { state.vp[t.id].bet = 0; t.message = ""; renderVideoPoker(); save(); }
+      if (a === "clear") { freeReturn(t.id); state.vp[t.id].bet = 0; t.message = ""; renderVideoPoker(); save(); }
       if ((a === "holdAll" || a === "holdNone") && t.phase === "holding" && !t.busy) { t.held = t.held.map(() => a === "holdAll"); renderVideoPoker(); }
       if (a === "togglePay") { state.vpPayHidden = !state.vpPayHidden; renderVideoPoker(); save(); }
     });
@@ -4330,7 +4395,8 @@
     if (!state.uth) state.uth = {};
     for (const id in UTH_TABLES) {
       const saved = state.uth[id] || {};
-      if (saved.inPlay > 0) refundTo(id, saved.inPlay);
+      if (saved.inPlay > 0) refundTo(id, Math.max(0, saved.inPlay - freeReturn(id, "inPlay")));
+      else freeReturn(id, "inPlay");
       state.uth[id] = { seats: saved.seats || [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }], inPlay: 0 };
     }
     const uthSeats = (t) => state.uth[t.id].seats;
@@ -4356,7 +4422,8 @@
       }
       t.busy = true; t.phase = "dealing"; t.message = "";
       t.lastBets = seats.map(s => ({ ...s }));
-      state.uth[t.id].inPlay = uthCost(seats);
+      state.uth[t.id].inPlay = uthCost(seats);   // free chips included; on a reload they go back as free chips
+      freeStart(t.id);
       countPlay("uth");
       t.hands = [];
       seats.forEach((s, seat) => {
@@ -4462,6 +4529,7 @@
       state.casinoChips += back + cashback;
       casinoRecord(wagered, back + cashback);
       state.uth[t.id].inPlay = 0;
+      freeDone(t.id);
       const levelsGained = addXp(wagered);   // XP = bet × game multiplier (raises and Trips count)
       const net = back - wagered;
       t.message = `Dealer has ${t.dealerHand}${qualifies ? "" : " (doesn't qualify: Antes push)"}. ` +
@@ -4571,10 +4639,10 @@
 
           ${betting ? `<div class="chipsRow">
             <span class="muted">Chip:</span>
-            ${t.chips.map(v => `<button class="chip ${v === t.chip ? "selected" : ""}" data-uthchip="${v}"
+            ${t.chips.map(v => `<button class="chip ${v === t.chip && !t.chipFree ? "selected" : ""}" data-uthchip="${v}"
                  style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}</button>`).join("")}
             <span class="muted">Click Ante or Trips on a seat to add the chip. The Blind matches the Ante.</span>
-          </div>` : ""}
+          </div>${freeChipRow(t, t.chipFree)}` : ""}
           <div class="bjActions">${actions}</div>
           <div id="casinoMsg" class="${/won|broke even/.test(t.message) ? "income" : "flash"}" style="margin-top:10px; text-align:center">${t.message}</div>
           <div class="muted" style="margin-top:6px; text-align:center">Raise 3× or 4× before the flop, 2× after the flop, or 1× after the river (once per hand) · The dealer needs a pair to qualify, otherwise Antes push · Best 5 of 7 cards</div>
@@ -4599,20 +4667,29 @@
       if (!UTH_TABLES[currentGame] || isPaused()) return;
       const t = uth;
       const chip = e.target.closest("[data-uthchip]");
-      if (chip) { t.chip = Number(chip.dataset.uthchip); renderUth(); return; }
+      if (chip) { t.chip = Number(chip.dataset.uthchip); t.chipFree = false; renderUth(); return; }
+      const fchip = e.target.closest("[data-freechip]");
+      if (fchip) { t.chip = Number(fchip.dataset.freechip); t.chipFree = true; renderUth(); return; }
       const sp = e.target.closest("[data-uthspot]");
       if (sp && t.phase === "betting" && !t.busy) {
         const [seatStr, kind] = sp.dataset.uthspot.split("-");
         const s = uthSeats(t)[Number(seatStr)], v = t.chip;
+        const free = t.chipFree;
         if (kind === "ante") {
           if (s.ante + v > t.max) return uthMsg("Table limit: max ante " + fmt(t.max) + ".");
-          if (purse(t.id) < v * 2) return uthMsg(`Not enough ${purseName(t.id)} (Ante + Blind = ` + fmt(v * 2) + ").");
-          payFrom(t.id, v * 2); s.ante += v;
+          if (free) {   // a free Ante needs 2 chips: one for the Ante and one for the Blind
+            if (!freeTake(t.id, v, 2)) return uthMsg("A free Ante needs 2 free chips (Ante + Blind).");
+          } else {
+            if (purse(t.id) < v * 2) return uthMsg(`Not enough ${purseName(t.id)} (Ante + Blind = ` + fmt(v * 2) + ").");
+            payFrom(t.id, v * 2);
+          }
+          s.ante += v;
         } else {
           if (!s.ante) return uthMsg("Put an Ante on this seat first.");
           if (s.trips + v > t.max) return uthMsg("Table limit: max Trips " + fmt(t.max) + ".");
-          if (purse(t.id) < v) return uthMsg(`Not enough ${purseName(t.id)}.`);
-          payFrom(t.id, v); s.trips += v;
+          if (free) { if (!freeTake(t.id, v)) return uthMsg("No free chips of that kind left."); }
+          else { if (purse(t.id) < v) return uthMsg(`Not enough ${purseName(t.id)}.`); payFrom(t.id, v); }
+          s.trips += v;
         }
         t.message = "";
         uthClearTable(t);
@@ -4625,7 +4702,7 @@
       if (a === "togglePay") { state.uthPayHidden = !state.uthPayHidden; renderUth(); save(); return; }
       if (a === "deal" && t.phase === "betting" && !t.busy) uthDeal();
       if (a === "clear" && t.phase === "betting") {
-        refundTo(t.id, uthCost(uthSeats(t)));
+        refundTo(t.id, uthCost(uthSeats(t)) - freeReturn(t.id));
         state.uth[t.id].seats = [{ ante: 0, trips: 0 }, { ante: 0, trips: 0 }];
         uthClearTable(t);
         t.message = ""; updateCounter(); renderUth(); save();
@@ -6236,9 +6313,9 @@
         now: () => { const n = (x, w) => `${x} ${w}${x === 1 ? "" : "s"}`; return state.legacy.empire ? "Your fleet is already kept on every reset" : `You'd keep ${n(logi.trucks.length, "truck")}, ${n(logi.tankers.length, "tanker")}, ${n(logi.planes.length, "plane")}`; } },
       { id: "vip", icon: "🎟️", name: "VIP Coins", max: 2,
         text: () => state.legacy.vip
-          ? "Level 2: your VIP coins come every 10 minutes instead of every 20."
-          : "500 scoin of free-bet VIP coins every 20 minutes, for the Super high roller tables. Wins become casino chips.",
-        now: () => state.legacy.vip ? "Now every 20 min → after: every 10 min" : "Saves up to 1,500 scoin (3 bonuses)" },
+          ? "Level 2: your free 500 scoin VIP chips come every 10 minutes instead of every 20."
+          : "A free 500 scoin bet chip every 20 minutes for the Super high roller tables. What it wins goes to your casino chips.",
+        now: () => state.legacy.vip ? "Now every 20 min → after: every 10 min" : "Saves up to 100 chips" },
     ];
 
     function showPrestigeOffer() {
@@ -6268,7 +6345,7 @@
         : "your money, casino chips, businesses, workers, special businesses, investments and logistics fleet";
       showModal(`<h2>${c.icon} ${c.name}</h2>
         <p>Are you sure? This <b>resets</b> ${lost}.</p>
-        <p class="muted">Kept: achievements, Gambler &amp; Investor levels, cosmetics, statistics, Legacy bonuses${state.legacy.vip ? ", VIP coins" : ""}.</p>
+        <p class="muted">Kept: achievements, Gambler &amp; Investor levels, cosmetics, statistics, Legacy bonuses, free bet chips.</p>
         <p>This can't be undone.</p>
         ${state.legacy.count + 1 === PRESTIGE_MAX ? `<p style="color:#ffd34d"><b>This is your final prestige.</b> After it no more resets are possible, but you can keep playing.</p>` : ""}
         <button class="btn big" data-prestige="confirm" data-choice="${id}">⭐ Prestige now</button>
@@ -6285,7 +6362,7 @@
       L.history.push({ choice: id, at: Date.now() });
       const keep = {
         achievements: state.achievements, stats: state.stats, casinoXp: state.casinoXp, casinoStats: state.casinoStats,
-        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId, xpVersion: state.xpVersion, logiXp: state.logiXp,
+        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId, xpVersion: state.xpVersion, logiXp: state.logiXp, freeChips: state.freeChips, freeTimers: state.freeTimers,
         vpPayHidden: state.vpPayHidden, uthPayHidden: state.uthPayHidden, view: "income",
         invest: { xp: inv.xp, properties: [], etf: 0, etfTimer: ETF_EVERY, etfHistory: [] },
         // all-time logistics counters are statistics: always kept
@@ -6312,57 +6389,83 @@
     });
     $("prestigeBtn").addEventListener("click", () => { if (!isPaused() && canPrestige()) showPrestigeOffer(); });
 
-    /* ----- 🎟️ VIP coins: 500 scoin every 20 min (15, then 10 with more picks), saved up to 1,500 ----- */
-    var VIP_AMOUNT = 500 * SCOIN, VIP_MAX = 3 * VIP_AMOUNT;
-    function vipMinutes(n = state.legacy.vip) { return n >= 2 ? 10 : 20; }   // 1st pick: every 20 min, 2nd pick: every 10 min
-    if (state.legacy.vip > 0 && (!state.vip.timer || state.vip.timer > vipMinutes() * 60)) state.vip.timer = vipMinutes() * 60;
+    /* =====================================================================
+       🎁 FREE BET CHIPS from the Gambler level (and 500 scoin chips from the VIP Coins prestige bonus).
+       Each chip type has its own timer; you can hold up to 100 of each, then its timer stops.
+       Timers: 20 min, 15 min from level 45, 10 min from level 85. Not usable in Plinko and Sky Climb.
+       ===================================================================== */
+    const FREE_CHIP_TYPES = [
+      { value: 10000, level: 5 }, { value: 50000, level: 15 }, { value: 100000, level: 25 }, { value: 1000000, level: 35 },
+      { value: 10000000, level: 55 }, { value: 100000000, level: 65 }, { value: 250000000, level: 75 }, { value: 500000000, level: 99 },
+    ];
+    const FREE_CHIP_MAX = 100;
+    const VIP_CHIP = 500000000;
+    function freeChipMinutes() { const L = levelInfo(state.casinoXp).level; return L >= 85 ? 10 : L >= 45 ? 15 : 20; }
+    function vipMinutes(n = state.legacy.vip) { return n >= 2 ? 10 : 20; }   // VIP Coins: 1st pick every 20 min, 2nd pick every 10 min
+    const freeUnlocked = () => FREE_CHIP_TYPES.filter(c => levelInfo(state.casinoXp).level >= c.level);
 
-    function vipCanToggle(id) {
-      if (id === "rouletteSuper") return !ROULETTE_TABLES[id].spinning && Object.keys(ROULETTE_TABLES[id].bets).length === 0;
-      if (id === "bjSuper") return BJ_TABLES[id].phase === "betting" && state.bj[id].bets.every(b => b === 0);
-      if (id === "vpSuper") return VP_TABLES[id].phase === "betting";
-      if (id === "uthSuper") return UTH_TABLES[id].phase === "betting" && uthCost(state.uth[id].seats) === 0;
-      if (id === "plinkoSuper") return plinko.balls.length === 0;
-      return false;
+    // Old VIP coins (a balance) become 500 scoin free chips; any leftover goes to casino chips
+    if (state.vip && state.vip.coins > 0) {
+      const n = Math.floor(state.vip.coins / VIP_CHIP);
+      state.freeChips[VIP_CHIP] = Math.min(FREE_CHIP_MAX, (state.freeChips[VIP_CHIP] || 0) + n);
+      state.casinoChips += state.vip.coins - n * VIP_CHIP;
+      state.vip.coins = 0;
     }
+    if (state.plinkoVipInPlay > 0) { state.casinoChips += state.plinkoVipInPlay; state.plinkoVipInPlay = 0; }
+    state.vipMode = {};
+
+    function freeTick() {
+      if (isPaused()) return;
+      const gap = freeChipMinutes() * 60;
+      for (const c of freeUnlocked()) {
+        const v = c.value, have = state.freeChips[v] || 0;
+        if (!state.freeTimers[v] || state.freeTimers[v] > gap) state.freeTimers[v] = gap;
+        if (have >= FREE_CHIP_MAX) { state.freeTimers[v] = gap; continue; }     // full: the timer waits
+        if (--state.freeTimers[v] <= 0) { state.freeChips[v] = have + 1; state.freeTimers[v] = gap; showNotice(`🎁 Free ${chipLabel(v)} chip!`); }
+      }
+      if (state.legacy.vip > 0) {   // ⭐ VIP Coins prestige bonus
+        const gapV = vipMinutes() * 60, have = state.freeChips[VIP_CHIP] || 0;
+        if (!state.vip.timer || state.vip.timer > gapV) state.vip.timer = gapV;
+        if (have >= FREE_CHIP_MAX) state.vip.timer = gapV;
+        else if (--state.vip.timer <= 0) {
+          state.freeChips[VIP_CHIP] = have + 1; state.vip.timer = gapV;
+          showAlert("🎫 VIP: free 500 scoin chip!", "Use it as a free bet at the Super high roller tables.", "good");
+        }
+      }
+      updateVipBar();
+    }
+    setInterval(freeTick, 1000);
+
+    // The line under the Gambler level: every free chip you have, how many, and when the next one comes
     var vipReady;   // set once everything below exists (updateCounter can run earlier during start-up)
     function updateVipBar() {
       if (!vipReady) return;
-      const has = state.legacy.vip > 0;
-      $("vipStat").hidden = !has;
-      if (!has) { $("vipBar").hidden = true; return; }
-      $("vipCoins").textContent = fmt(state.vip.coins);
-      $("vipTimer").textContent = state.vip.coins >= VIP_MAX ? "Full (max 1,500 scoin)" : `+500 scoin in ${clock(state.vip.timer)}`;
-      const id = currentGame;
-      const show = $("casinoView").hidden === false && SUPER_TABLES.includes(id);
-      $("vipBar").hidden = !show;
-      if (!show) return;
-      const on = vipOn(id), can = vipCanToggle(id);
-      $("vipBar").innerHTML = `<div class="row">
-        <div><b>🎫 VIP coins: ${fmt(state.vip.coins)}</b>
-          <div class="muted">${on ? "Your bets at this table are paid with VIP coins. Everything you win goes to your casino chips."
-            : "Turn on to bet with your free VIP coins at this table."}${id === "uthSuper" ? " Hold'em: your VIP coins must also cover the biggest raise (4× ante)." : ""}</div></div>
-        <button class="btn ${on ? "" : "ghost"} small agentToggle ${on ? "on" : ""}" data-vip-toggle="${id}" ${can ? "" : "disabled"}
-          title="${can ? "" : "Finish the round and clear your bets to switch"}">🎫 VIP coins: ${on ? "ON" : "OFF"}</button></div>`;
-    }
-    $("vipBar").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-vip-toggle]");
-      if (!b || b.disabled || isPaused()) return;
-      const id = b.dataset.vipToggle;
-      if (!vipCanToggle(id)) return;
-      state.vipMode[id] = !state.vipMode[id];
-      updateVipBar(); renderCasino(); save();
-    });
-    setInterval(() => {
-      if (isPaused() || state.legacy.vip <= 0) return;
-      if (state.vip.coins >= VIP_MAX) { state.vip.timer = vipMinutes() * 60; }
-      else if (--state.vip.timer <= 0) {
-        state.vip.coins = Math.min(VIP_MAX, state.vip.coins + VIP_AMOUNT);
-        state.vip.timer = vipMinutes() * 60;
-        showAlert("🎫 +500 scoin VIP coins!", "Use them at any Super high roller table in the 🎰 Casino.", "good");
+      $("vipStat").hidden = true;
+      $("vipBar").hidden = true;
+      const L = levelInfo(state.casinoXp).level;
+      const items = FREE_CHIP_TYPES.filter(c => L >= c.level).map(c => {
+        const n = state.freeChips[c.value] || 0;
+        return `<span class="freeItem">${chipMark(c.value)}<b>×${n}</b><small>${n >= FREE_CHIP_MAX ? "full" : clock(state.freeTimers[c.value] || freeChipMinutes() * 60)}</small></span>`;
+      });
+      if (state.legacy.vip > 0 && L < 99) {
+        const n = state.freeChips[VIP_CHIP] || 0;
+        items.push(`<span class="freeItem vip">🎫${chipMark(VIP_CHIP)}<b>×${n}</b><small>${n >= FREE_CHIP_MAX ? "full" : clock(state.vip.timer || vipMinutes() * 60)}</small></span>`);
       }
-      updateVipBar();
-    }, 1000);
+      const next = FREE_CHIP_TYPES.find(c => L < c.level);
+      $("freeChipsLine").innerHTML = `<b>🎁 Free bet chips</b> <span class="muted">(every ${freeChipMinutes()} min, max ${FREE_CHIP_MAX} each)</span>
+        ${items.join("") || `<span class="muted">none yet</span>`}
+        ${next ? `<span class="muted">· next: ${chipLabel(next.value)} chip at level ${next.level}</span>` : ""}`;
+    }
+
+    // Row of free chips under a table's normal chips. Only chips that fit the table's limit are shown.
+    function freeChipRow(t, selectedFree) {
+      const owned = Object.keys(state.freeChips).map(Number).filter(v => state.freeChips[v] > 0 && v <= t.max).sort((a, b) => a - b);
+      if (!owned.length) return "";
+      return `<div class="chipsRow freeRow"><span class="muted">🎁 Free:</span>
+        ${owned.map(v => `<button class="chip free ${selectedFree && t.chip === v ? "selected" : ""}" data-freechip="${v}"
+            style="background:${CHIP_COLORS[v].bg}; color:${CHIP_COLORS[v].text}">${chipLabel(v)}<i>×${state.freeChips[v]}</i></button>`).join("")}
+        <span class="muted">Free bet chips: what the bet pays goes to your casino chips.${freePlacedSum(t.id) ? ` On the table now: ${fmt(freePlacedSum(t.id))} free.` : ""}</span></div>`;
+    }
     vipReady = true;
 
     // Checked every second: show the button, and the golden pop-up the first time you reach 1 gcoin
@@ -6397,6 +6500,12 @@
       const unlock = (L) => {
         const u = [];
         if (lg) for (const k in AGENT_LEVEL) if (AGENT_LEVEL[k] === L) u.push(`🤖 ${FLEETS[k].label} agent`);
+        if (gam) {
+          const fc = FREE_CHIP_TYPES.find(c => c.level === L);
+          if (fc) u.push(`🎁 Free ${chipLabel(fc.value)} chip`);
+          if (L === 45) u.push("🎁 Free chips every 15 min");
+          if (L === 85) u.push("🎁 Free chips every 10 min");
+        }
         if (gam && L >= 5 && (L - 5) % 10 === 0) u.push(`🎰 Casino #${(L - 5) / 10 + 1}`);
         if (kind === "investor" && L >= 5 && (L - 5) % 10 === 0) u.push(`🏨 Hotel #${(L - 5) / 10 + 1}`);
         if (kind === "investor" && L === 10) u.push("🏦 Brokerage Firm");

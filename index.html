@@ -2390,21 +2390,41 @@
     let currentGame = null;   // null = game list
 
     /* =====================================================================
-       GAMBLER LEVEL: 1 XP for every bcoin you bet.
-       Total XP needed follows a smooth curve: XP = 3.738 * level^6.728
-         level 10 ≈ 20 million, level 50 ≈ 1 trillion, level 99 ≈ 100 trillion
-       Each level gives 0.1% cashback on lost bets (level 10 = 1%). Max level 99.
+       GAMBLER & INVESTOR LEVELS (same curve): XP is earned by playing time, not bet size.
+         Casino: every round gives 1 XP (Classic), 2 XP (High rollers, Plinko, Sky Climb) or 4 XP (Super high rollers).
+                 At most one round every 15 seconds earns XP (so fast games can't be farmed).
+         Investing: every minute with at least 1,000 invested gives 4 XP, 8 XP from 1 scoin, 16 XP from 100 scoin.
+       Total XP needed: 0.147 * level^2.76  →  level 10 = 85, level 50 = 7,186, level 99 = 47,345.
+       Typical play (Classic → High → Super tables): level 50 in about 13 h, level 99 in about 55 h.
+       Each Gambler level gives 0.1% cashback on lost bets (level 10 = 1%). Max level 99.
        ===================================================================== */
     const MAX_LEVEL = 99;
-    const XP_CURVE_A = 3.738;
-    const XP_CURVE_K = 6.728;
+    const XP_CURVE_A = 0.147;
+    const XP_CURVE_K = 2.76;
 
-    // LEVEL_XP[L] = total XP needed to reach level L (each step rounded to 3 digits)
+    // LEVEL_XP[L] = total XP needed to reach level L
     const LEVEL_XP = [0, 0];
-    for (let L = 2; L <= MAX_LEVEL; L++) {
-      const raw = XP_CURVE_A * (Math.pow(L, XP_CURVE_K) - Math.pow(L - 1, XP_CURVE_K));
-      const p = Math.pow(10, Math.floor(Math.log10(raw)) - 2);
-      LEVEL_XP[L] = LEVEL_XP[L - 1] + Math.round(raw / p) * p;
+    for (let L = 2; L <= MAX_LEVEL; L++) LEVEL_XP[L] = Math.max(LEVEL_XP[L - 1] + 1, Math.round(XP_CURVE_A * Math.pow(L, XP_CURVE_K)));
+
+    // Old saves used "1 XP per bcoin" with a much steeper curve: keep the same level and progress
+    if (!state.xpVersion) {
+      const OLD = [0, 0];
+      for (let L = 2; L <= MAX_LEVEL; L++) {
+        const raw = 3.738 * (Math.pow(L, 6.728) - Math.pow(L - 1, 6.728));
+        const p = Math.pow(10, Math.floor(Math.log10(raw)) - 2);
+        OLD[L] = OLD[L - 1] + Math.round(raw / p) * p;
+      }
+      const convert = (xp) => {
+        xp = xp || 0;
+        let L = 1;
+        while (L < MAX_LEVEL && xp >= OLD[L + 1]) L++;
+        if (L >= MAX_LEVEL) return LEVEL_XP[MAX_LEVEL];
+        const frac = (xp - OLD[L]) / (OLD[L + 1] - OLD[L]);
+        return Math.floor(LEVEL_XP[L] + frac * (LEVEL_XP[L + 1] - LEVEL_XP[L]));
+      };
+      state.casinoXp = convert(state.casinoXp);
+      if (state.invest) state.invest.xp = convert(state.invest.xp);
+      state.xpVersion = 2;
     }
     const CASHBACK_PER_LEVEL = 0.001;   // 0.1%
 
@@ -2443,10 +2463,21 @@
         : fmtNum(info.into) + " / " + fmtNum(info.need) + " XP to level " + (info.level + 1);
     }
 
-    // Adds XP and returns how many levels you gained
-    function addXp(amount) {
+    // XP for a finished casino round, by table size; at most one round every 15 seconds counts
+    const XP_ROUND_GAP = 15000;
+    function roundXp() {
+      const id = currentGame || "";
+      if (/Super/.test(id)) return 4;
+      if (/High/.test(id) || id === "plinko" || id === "climb") return 2;
+      return 1;
+    }
+    // Gives this round's XP and returns how many levels you gained
+    function addXp() {
+      const now = Date.now();
+      if (now - (state.lastXpAt || 0) < XP_ROUND_GAP) return 0;
+      state.lastXpAt = now;
       const before = levelInfo(state.casinoXp).level;
-      state.casinoXp += amount;
+      state.casinoXp += roundXp();
       const gained = levelInfo(state.casinoXp).level - before;
       updateCasinoLevel();
       if (gained > 0) {
@@ -2867,7 +2898,7 @@
         if (result === 0 && keys.length === 1 && keys[0] === "n0") state.stats.rouletteZeroOnly = true;
         countPlay("roulette");
         if ((table.bets.red || 0) >= 500000000 || (table.bets.black || 0) >= 500000000) state.stats.redBlack500 = true;
-        const levelsGained = addXp(bet);      // 1 XP per bcoin bet
+        const levelsGained = addXp();      // XP for this round
         setBets(table, {});
         table.spinning = false;
         table.lastResult = result;
@@ -2888,7 +2919,7 @@
 
     /* =====================================================================
        INVESTING
-       Investor level: 1 XP for every bcoin you invest (same level curve as the casino).
+       Investor level: XP for every minute you have money invested (same level curve as the casino).
        ===================================================================== */
     const RE_MIN = 50000;
     const RE_LOCK = 1200;           // 20 minutes locked after buying
@@ -2977,7 +3008,6 @@
       inv.properties.push({ id: state.nextId++, value: amount, lock: RE_LOCK, rentIn: RE_RENT_EVERY });
       investRecord("re", amount, 0);
       $("reAmount").value = "";
-      addInvestXp(amount);
       investMessage("🏠 Bought a property for " + fmt(amount) + ".", true);
       renderProperties(); updateCounter(); updateInvestLive(); save();
     });
@@ -3052,7 +3082,6 @@
       inv.etfInvested += amount;
       investRecord("etf", amount, 0);
       $("etfAmount").value = "";
-      addInvestXp(amount);
       investMessage("📊 Invested " + fmt(amount) + " in the ETF.", true);
       updateCounter(); updateInvestLive(); save();
     });
@@ -3097,7 +3126,6 @@
       inv.goldInvested += amount;
       investRecord("gold", amount, 0);
       $("goldAmount").value = "";
-      addInvestXp(amount);
       investMessage("🪙 Bought " + fmt(amount) + " of gold.", true);
       updateCounter(); updateInvestLive(); save();
     });
@@ -3146,7 +3174,6 @@
       investRecord("petf", amount, 0);
       inv.petfTimer = ETF_EVERY;
       $("petfAmount").value = "";
-      addInvestXp(amount);
       investMessage("🏦 Invested " + fmt(amount) + " in the Broker ETF.", true);
       updateCounter(); updateInvestLive(); save();
     });
@@ -3270,7 +3297,15 @@
     }
 
     /* ----- Runs every second from the game loop. Returns rent paid (taxable). ----- */
+    // Investor XP: every minute with money invested (4 XP; 8 XP from 1 scoin; 16 XP from 100 scoin)
+    function investedTotal() { return ["re", "etf", "gold", "petf"].reduce((a, k) => a + investCurrent(k), 0); }
+    function investXpPerMinute() {
+      const v = investedTotal();
+      return v >= 100 * SCOIN ? 16 : v >= SCOIN ? 8 : v >= 1000 ? 4 : 0;
+    }
     function investTick() {
+      inv.xpSec = (inv.xpSec || 0) + 1;
+      if (inv.xpSec >= 60) { inv.xpSec = 0; const x = investXpPerMinute(); if (x) addInvestXp(x); }
       let rent = 0;
       let changed = false;
 
@@ -3755,7 +3790,7 @@
       state.casinoChips += back + cashback;
       casinoRecord(wagered, back + cashback);
       state.bj[t.id].inPlay = 0;
-      const levelsGained = addXp(wagered);         // 1 XP per bcoin bet (doubles and splits count)
+      const levelsGained = addXp();         // XP for this round (doubles and splits count)
 
       const net = back - wagered;
       t.message = (t.message ? t.message + " " : "") + (insuranceText ? insuranceText + " " : "") +
@@ -4058,7 +4093,7 @@
       state.casinoChips += back + jackpot + cashback;
       casinoRecord(bet, back + jackpot + cashback);
       state.vp[t.id].inPlay = 0;
-      const levelsGained = addXp(bet);   // 1 XP per bcoin bet
+      const levelsGained = addXp();   // XP for this round
 
       t.result = cat;
       t.jackpotWon = jackpot > 0;
@@ -4400,7 +4435,7 @@
       state.casinoChips += back + cashback;
       casinoRecord(wagered, back + cashback);
       state.uth[t.id].inPlay = 0;
-      const levelsGained = addXp(wagered);   // 1 XP per bcoin bet (raises and Trips count)
+      const levelsGained = addXp();   // XP for this round (raises and Trips count)
       const net = back - wagered;
       t.message = `Dealer has ${t.dealerHand}${qualifies ? "" : " (doesn't qualify: Antes push)"}. ` +
         (net > 0 ? `You won ${fmt(net)}!` : net < 0 ? `You lost ${fmt(-net)}.` : "You broke even.") +
@@ -4723,7 +4758,7 @@
       Object.assign(climb, { active: true, stake: climb.bet, step: 0, shield: false, balls: climbMachine(),
                              drawn: [], tookHalf: false, banked: 0, message: "", crashed: false, lastBet: climb.bet });
       state.climbInPlay = climb.stake;
-      addXp(climb.bet);                 // 1 XP per bcoin bet
+      addXp();                 // XP for this round
       updateCounter(); save();
       await climbDraw();
     }
@@ -5387,7 +5422,7 @@
       if (vipBall) state.plinkoVipInPlay += total; else state.plinkoInPlay += total;
       casinoRecord(total, 0);
       countPlay("plinko", n);                          // every ball is one game
-      addXp(total);                                   // 1 XP per bcoin bet
+      addXp();                                   // XP for this round
       if (plinko.balls.length === 0) { plinko.roundBet = 0; plinko.roundWin = 0; }
       plinko.roundBet += total;
       plinko.message = "";
@@ -6186,7 +6221,7 @@
       L.history.push({ choice: id, at: Date.now() });
       const keep = {
         achievements: state.achievements, stats: state.stats, casinoXp: state.casinoXp, casinoStats: state.casinoStats,
-        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId,
+        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId, xpVersion: state.xpVersion,
         vpPayHidden: state.vpPayHidden, uthPayHidden: state.uthPayHidden, view: "income",
         invest: { xp: inv.xp, properties: [], etf: 0, etfTimer: ETF_EVERY, etfHistory: [] },
         // all-time logistics counters are statistics: always kept
@@ -6311,7 +6346,8 @@
       }
       const next = cur < MAX_LEVEL ? `${fmtNum(LEVEL_XP[cur + 1] - xp)} XP to level ${cur + 1}` : "Max level reached!";
       showModal(`<h2>${gam ? "🎲 Gambler" : "📈 Investor"} levels</h2>
-        <p class="muted">${gam ? "1 XP for every bcoin you bet in the casino" : "1 XP for every bcoin you invest"} ·
+        <p class="muted">${gam ? "Each casino round gives 1 XP (Classic), 2 XP (High rollers, Plinko, Sky Climb) or 4 XP (Super high rollers), at most one round every 15 seconds"
+                               : "Every minute with money invested gives 4 XP, 8 XP from 1 scoin invested, 16 XP from 100 scoin"} ·
           You: level ${cur}, ${fmtNum(xp)} XP · ${next}</p>
         <div class="levelTableWrap"><table class="levelTable">
           <thead><tr><th>Level</th><th>Total XP</th><th>This level</th><th>${gam ? "Cashback" : "ETF fee"}</th><th>Unlocks</th></tr></thead>

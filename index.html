@@ -31,7 +31,17 @@
     }
 
     #incomeView { display: flex; }
-    #incomeView[hidden], #casinoView[hidden], #investView[hidden], #shopView[hidden], #logisticsView[hidden] { display: none; }
+    #incomeView[hidden], #casinoView[hidden], #investView[hidden], #shopView[hidden], #logisticsView[hidden], #wikiView[hidden] { display: none; }
+    #wikiView { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .wikiBody h2 { margin: 0 0 10px; }
+    .wikiBody h3 { margin: 22px 0 8px; color: #ffd34d; }
+    .wikiBody p, .wikiBody li { line-height: 1.55; }
+    .wikiTable { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 14px; }
+    .wikiTable th { text-align: left; color: #9a9ab0; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    .wikiTable td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: top; }
+    .wikiTable tr:hover td { background: rgba(255,255,255,0.03); }
+    .wikiCols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .wikiCols { grid-template-columns: 1fr; } .wikiTable { font-size: 12px; } }
     #logisticsView { max-width: 900px; margin: 0 auto; padding: 20px; }
     .tankerGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; }
     @media (max-width: 860px) { .tankerGrid { grid-template-columns: 1fr; } }
@@ -928,6 +938,7 @@
     <button class="tab" data-view="logistics">🚢 Logistics</button>
     <button class="tab" data-view="achievements">🏆 Achievements <span id="achTab"></span></button>
     <button class="tab" data-view="shop">🛍️ Shop</button>
+    <button class="tab" data-view="wiki">📖 Wiki</button>
   </nav>
 
   <div id="incomeView">
@@ -1156,6 +1167,14 @@
       <div class="stat"><div class="label">🏆 Achievements unlocked</div><div class="value" id="achTotal">0</div></div>
     </div>
     <div id="achList"></div>
+  </section>
+
+  <!-- ===== Wiki: how to play (filled in by JavaScript) ===== -->
+  <section id="wikiView" hidden>
+    <div class="subLayout">
+      <nav class="subNav" id="wikiNav"></nav>
+      <div class="subMain"><div class="card wikiBody" id="wikiBody"></div></div>
+    </div>
   </section>
 
   <!-- ===== Shop: cosmetics ===== -->
@@ -2449,6 +2468,8 @@
       $("shopView").hidden = view !== "shop";
       $("logisticsView").hidden = view !== "logistics";
       $("achievementsView").hidden = view !== "achievements";
+      $("wikiView").hidden = view !== "wiki";
+      if (view === "wiki" && typeof renderWiki === "function") renderWiki();
       if (view === "achievements" && typeof renderAchievements === "function") renderAchievements();
       document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
       save();
@@ -7379,6 +7400,210 @@
       if (b && !isPaused()) showLevelTable(b.dataset.levels);
     });
 
+    /* =====================================================================
+       📖 WIKI: how to play, with tables built from the game's own data (always up to date).
+       ===================================================================== */
+    const WIKI_SECTIONS = [
+      { id: "general", name: "⭐ General" }, { id: "income", name: "💰 Income" }, { id: "casino", name: "🎰 Casino" },
+      { id: "investing", name: "📈 Investing" }, { id: "logistics", name: "🚢 Logistics" },
+      { id: "achievements", name: "🏆 Achievements" }, { id: "shop", name: "🛍️ Shop" },
+    ];
+    const wt = (head, rows) => `<table class="wikiTable"><thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    const infoText = (id) => ($("info-" + id) ? $("info-" + id).innerHTML : "");
+    const pctx = (x) => (x * 100).toFixed(x * 100 % 1 ? 1 : 0) + "%";
+
+    function wikiGeneral() {
+      return `<h2>⭐ General</h2>
+        <p><b>Coin Clicker</b> is an idle money game. Click the coin, build businesses, play the casino, invest, run a logistics empire, and grow your fortune up to <b>1 gcoin</b>, where you can prestige.</p>
+        <h3>Money units</h3>
+        ${wt(["Unit", "Value", "Where you see it"], [
+          ["bcoin", "1", "Normal amounts"], ["scoin (sc)", "1,000,000 bcoin", "Amounts from 1 million (your main counter switches at 100 scoin)"], ["gcoin", "1,000,000 scoin", "The biggest amounts"]])}
+        <p class="muted">Hover your money counter to see it in the other unit.</p>
+        <h3>The tabs</h3>
+        ${wt(["Tab", "What you do there"], [
+          ["💰 Income", "Click the coin, buy businesses, hire workers, special businesses, boosters"],
+          ["🎰 Casino", "Move money into casino chips and play table games"],
+          ["📈 Investing", "Real estate, ETFs, gold, Broker ETF and live crypto trading"],
+          ["🚢 Logistics", "Trucks, oil tankers and cargo planes on contracts, with a world map"],
+          ["🏆 Achievements", "Goals across the whole game"], ["🛍️ Shop", "Cosmetics: backgrounds and coins"], ["📖 Wiki", "This guide"]])}
+        <h3>🧾 Taxes</h3>
+        <p>Every second there is a 1 in ${Math.round(1 / TAX_CHANCE).toLocaleString()} chance of a tax inspection (and always after ${TAX_FORCED_AFTER / 60} minutes without one).
+          The bill is <b>${pctx(TAX_RATE)} of everything you earned in the last ${TAX_LOOKBACK / 60} minutes</b>. You have <b>${TAX_TIME_TO_PAY / 60} minutes</b> to pay it with the red button.
+          If you can't, the bill grows by ${pctx(TAX_LATE_PENALTY)} and you get ${TAX_TIME_TO_PAY / 60} more minutes. Miss it again and it's <b>game over</b>. Bills stack, so keep some money ready.
+          A Debt &amp; financial lawyer gives part of every tax payment back.</p>
+        <h3>📊 Levels</h3>
+        ${wt(["Level", "How you get XP", "What it gives"], [
+          ["🎲 Gambler (Casino)", "XP = bcoin you bet × the game's XP multiplier", "0.1% cashback on lost bets per level, casino businesses, free bet chips"],
+          ["📈 Investor (Investing)", "XP every minute you have money invested, plus XP per crypto trade", "Lower ETF fee, +0.1% on property sales per level, hotels, Brokerage Firm, lower crypto fee"],
+          ["🚚 Logistics", "XP for every delivered contract (contract minutes × 1 truck / 3 tanker / 6 plane)", "Logistics agents: trucks at 5, tankers at 25, planes at 50"]])}
+        <p class="muted">Each level card has a "📋 All levels" button with every level's XP and unlocks.</p>
+        <h3>⭐ Prestige</h3>
+        <p>When your <b>main money reaches 1 gcoin</b>, you can reset the game for a permanent Legacy bonus (max ${PRESTIGE_MAX} prestiges; the 4th finishes the game, but you can keep playing).
+          <b>Always kept:</b> achievements, Gambler, Investor and Logistics levels, cosmetics, statistics, free bet chips.</p>
+        ${wt(["Bonus", "Effect", "Max"], [
+          ["💼 Tycoon's Legacy", "+25% income from businesses, special businesses and clicks, for each pick", "Unlimited"],
+          ["🚢 Global Empire", "1st: keep trucks, tankers, planes, warehouses and Trading Port on every reset. 2nd: all contracts take half the time (same pay)", "2"],
+          ["🎟️ VIP Coins", "A free 500 scoin bet chip every 20 min (2nd pick: every 10 min) for the Super high roller tables", "2"]])}
+        <h3>💾 Saving</h3>
+        <p>The game saves automatically in your browser. In ⚙️ Settings you can save, download a backup file, load one, or reset the game.</p>`;
+    }
+
+    function wikiIncome() {
+      const biz = BUSINESS_TYPES.map(t => {
+        let unlock = "Always";
+        try { if (t.unlockText) unlock = t.unlockText(0).replace(/\s*\(.*\)\s*$/, ""); } catch (e) {}
+        return [`${t.emoji} <b>${t.name}</b>`, fmt(t.price) + (t.maxOwned > 1 ? `, then ×${t.priceMultiplier || 2} each` : ""), t.maxOwned,
+                `${t.maxEmployees - 2} workers + accountant + HR`, `${t.minIncome}–${t.maxIncome} / sec per worker`, unlock];
+      });
+      const traitRows = Object.entries(TRAITS).filter(([k]) => k !== "normal").map(([k, t]) =>
+        [`${t.emoji} ${t.name}`, t.desc, t.onlyFor ? t.onlyFor.map(id => (BUSINESS_TYPES.find(b => b.id === id) || {}).name).join(", ") : "All", k === "legend" ? "1%" : pctx(t.chance)]);
+      return `<h2>💰 Income</h2>
+        <h3>👆 Clicking</h3>
+        <p>Every click on the coin gives 1 bcoin (up to 10 clicks per second). Boosters and Tycoon's Legacy increase it.</p>
+        <h3>🏢 Businesses</h3>
+        <p>Buy a business, then hire workers. Each worker earns a random amount per second and has one trait. The first worker is free; each next one costs more. You choose from 3 candidates, and "New options" refreshes them for a small growing price.</p>
+        ${wt(["Business", "Price", "Max", "Staff", "Worker income", "Unlock"], biz)}
+        <h3>👤 Worker traits</h3>
+        ${wt(["Trait", "Effect", "Businesses", "Chance"], traitRows)}
+        <h3>🧮 Accountants (one per business)</h3>
+        ${wt(["Accountant", "Effect"], Object.values(ACCOUNTANTS).map(a => [`${a.emoji} ${a.name}`, a.desc]))}
+        <h3>🤝 HR (one per business)</h3>
+        ${wt(["HR", "Effect"], Object.values(HR_OPTIONS).map(a => [`${a.emoji} ${a.name}`, a.desc]))}
+        <h3>⚡ Boosters</h3>
+        ${wt(["Booster", "Price", "Effect", "Cooldown"], [
+          ["🥤 Energy drink", fmt(ENERGY_PRICE), `Clicks ×${ENERGY_MULTIPLIER} for ${ENERGY_SECONDS} s`, `${ENERGY_COOLDOWN / 60} min`],
+          ["💊 Magical pill", fmt(PILL_PRICE), `Each click also gives ${pctx(PILL_SHARE)} of your income per second, for ${PILL_SECONDS} s`, `${PILL_COOLDOWN / 60} min`],
+          ["🏛️ Political influence", fmt(INFLUENCE_PRICE), `Business income ×2 for ${INFLUENCE_SECONDS / 60} min`, `${INFLUENCE_COOLDOWN / 60} min`]])}
+        <h3>⭐ Special businesses</h3>
+        <p>No workers, HR or accountant. Sorted from cheapest to most expensive.</p>
+        ${wt(["Business", "Price", "Unlock", "What it does"], [
+          ["📦 Warehouse", fmt(WAREHOUSE_PRICE), `Max 5; slots open at ${WAREHOUSE_UNLOCKS.join(", ")} trucks`, `+${pctx(WAREHOUSE_BONUS)} on truck contract payouts each`],
+          ["⚖️ Law Firm", fmt(LAW_PRICE), "Always", `Hire up to ${LAW_MAX} attorneys (slot n costs ${fmt(LAW_SLOT_PRICE)} × n); pick 1 of 3 each time`],
+          ["🏢 Real Estate Agency", fmt(AGENCY_PRICE), `${fmt(AGENCY_UNLOCK)} all-time real estate profit`, `+${pctx(AGENCY_SALE_BONUS)} on property sales; 1 agent per ${fmt(AGENCY_PER_AGENT)} real estate profit (max ${AGENCY_MAX_AGENTS}), each earns 0/5/10/15 per second`],
+          ["🎢 Amusement Park", fmt(PARK_PRICE), "One per hotel", `Earns ${pctx(PARK_SHARE)} of its paired hotel's income`],
+          ["⛏️ Gold Mine", fmt(MINE_PRICE), `${fmt(MINE_UNLOCK)} all-time gold profit; max ${MINE_MAX}`, `${MINE_INCOME} / sec until 25–50 scoin is mined, then it closes`],
+          ["⚓ Trading Port", fmt(PORT_PRICE), "Own an oil tanker; max 1", `${PORT_PER_TANKER} / sec per tanker and +${pctx(PORT_BONUS)} on tanker contracts`]])}
+        <h3>⚖️ Attorneys</h3>
+        ${wt(["Attorney", "Effect"], Object.values(ATTORNEYS).map(a => [`${a.emoji} ${a.name}`, a.desc]))}`;
+    }
+
+    function wikiCasino() {
+      const lim = (t) => `${fmt(t.min)} – ${fmt(t.max)}`;
+      const tables = (map) => Object.values(map).map(t => `${t.title || t.name}: ${lim(t)}`).join("<br>");
+      const vpRows = VP_HANDS.slice(1).reverse().map(h => [h.name, h.pays + "×", h.jackpot ? `+${h.jackpot * 100}% of the jackpot (× your bet / max bet)` : ""]);
+      const pk = (map) => Object.keys(map).map(Number).sort((a, b) => b - a).map(c => [PK_NAMES[c], map[c] === 1.5 ? "3:2" : map[c] + ":1"]);
+      return `<h2>🎰 Casino</h2>
+        <p>Move money into <b>casino chips</b> at the top of the Casino tab, play, then cash out. Every game has Classic, High roller and (most) Super high roller tables.
+          Bets give <b>Gambler XP</b> (bet × the game's XP multiplier) and you get <b>cashback</b> on lost bets (0.1% per Gambler level, +5% per Criminal defence lawyer).
+          Random results use your browser's secure random generator.</p>
+        ${wt(["Game", "XP multiplier", "Super tables"], [["🎡 Roulette", "×2", "×4"], ["🃏 Blackjack", "×4", "×8"], ["🎴 Video Poker", "×1", "×2"],
+          ["🤠 Ultimate Texas Hold'em", "×5", "×10"], ["🔻 Plinko", "×1", "×2"], ["🎈 Sky Climb", "×1", "–"]])}
+        <h3>🎁 Free bet chips</h3>
+        <p>From Gambler level 5 you get free chips on timers (see the frame under the Gambler level). Use them at Roulette, Blackjack, Video Poker and Hold'em (not Plinko or Sky Climb).
+          A free chip is a bet: whatever it wins goes to your casino chips. At Hold'em, a free Ante needs 2 chips (Ante + Blind).</p>
+        ${wt(["Gambler level", "Free chip"], FREE_CHIP_TYPES.map(c => [c.level, "Free " + chipLabel(c.value) + " chip"]).concat([[45, "All timers 20 → 15 min"], [85, "All timers 15 → 10 min"]]).sort((x, y) => x[0] - y[0]))}
+
+        <h3>🎡 Roulette (European, 0–36)</h3>
+        <p>${tables(ROULETTE_TABLES)} per spot.</p>
+        ${wt(["Bet", "Covers", "Pays"], [["Straight", "1 number (incl. 0)", "35:1"], ["Split", "2 numbers next to each other (incl. 0–1/2/3)", "17:1"],
+          ["Street", "3 numbers in a row (incl. 0-1-2, 0-2-3)", "11:1"], ["Corner", "4 numbers (incl. 0-1-2-3)", "8:1"], ["Six line", "2 rows, 6 numbers", "5:1"],
+          ["Dozen / Column", "12 numbers", "2:1"], ["Red / Black, Odd / Even, 1–18 / 19–36", "18 numbers", "1:1"]])}
+        <p class="muted">0 loses all outside bets. House edge 2.7%.</p>
+
+        <h3>🃏 Blackjack</h3>
+        <p>${tables(BJ_TABLES)} per hand. Play up to 3 seats.</p>
+        <ul><li>${BJ_DECKS}-deck shoe, the dealer stands on 17. <b>Blackjack pays 3:2</b>, other wins 1:1, ties push.</li>
+          <li><b>Double</b> on any first two cards (one more card). <b>Split</b> pairs once per seat; split aces get one card each.</li>
+          <li><b>Surrender</b> a first-two-card hand to get half your bet back. <b>Insurance</b> (half your bet) pays 2:1 when the dealer shows an Ace and has blackjack.</li></ul>
+
+        <h3>🎴 Video Poker (Jacks or Better + Joker)</h3>
+        <p>${tables(VP_TABLES)}. 53 cards with one wild joker. Get 5 cards, hold the ones you like, draw new ones for the rest. Pays from a pair of Jacks or better.
+          <b>Jackpot</b> = 50× the table's max bet; your share is your bet ÷ the max bet. About 98% return with perfect play.</p>
+        ${wt(["Hand", "Pays", "Jackpot"], vpRows)}
+
+        <h3>🤠 Ultimate Texas Hold'em</h3>
+        <p>${tables(UTH_TABLES)} Ante per seat. Play 1 or 2 seats. Ante + equal Blind, optional Trips.</p>
+        <ul><li>Before the flop: check or raise 3×/4× the ante. After the flop: check or raise 2×. After the river: raise 1× or fold. You can raise only once.</li>
+          <li>Best 5 of 7 cards vs the dealer. <b>Play</b> pays 1:1 if you win. <b>Ante</b> pays 1:1, but pushes if the dealer has less than a pair.
+            <b>Blind</b> pays the table below when you win with a straight or better (otherwise pushes on a win). Ties push. Folding loses Ante and Blind.</li>
+          <li><b>Trips</b> pays on your own hand, even if you fold.</li></ul>
+        <div class="wikiCols"><div><b>Blind</b>${wt(["Hand", "Pays"], pk(UTH_BLIND_PAYS))}</div><div><b>Trips</b>${wt(["Hand", "Pays"], pk(UTH_TRIPS_PAYS))}</div></div>
+
+        <h3>🔻 Plinko</h3>
+        <p>${tables(PLINKO_TABLES)} per ball, up to 20 balls at once. Each ball falls through 12 rows into a slot (about 98% return):</p>
+        ${wt(["Slot", ...PLINKO_MULTS.map((m, i) => i + 1)], [["Pays", ...PLINKO_MULTS.map(m => m + "×")]])}
+
+        <h3>🎈 Sky Climb</h3>
+        <p>Bets ${fmt(CLIMB_MIN)} – ${fmt(CLIMB_MAX)}. A bag has 28 balls: 19 green, 8 red, 1 gold, not put back during a round.
+          Green climbs one step, gold climbs one step and gives a shield against the next red, red pops your balloon (you lose what is still riding).
+          After each step: <b>cash out</b>, <b>take half</b> (once per round), or <b>draw again</b>. About 97.7% return with perfect play.</p>
+        ${wt(["Step", ...CLIMB_LADDER.slice(1, 11).map((m, i) => i + 1)], [["Pays", ...CLIMB_LADDER.slice(1, 11).map(m => m + "×")]])}
+        ${wt(["Step", ...CLIMB_LADDER.slice(11).map((m, i) => i + 11)], [["Pays", ...CLIMB_LADDER.slice(11).map(m => m.toLocaleString() + "×")]])}`;
+    }
+
+    function wikiInvesting() {
+      return `<h2>📈 Investing</h2>
+        <p><b>Investor XP</b>: every minute you have money invested gives 4 XP (8 XP from 1 scoin invested, 16 XP from 100 scoin), plus XP per crypto trade.
+          Each level lowers the ETF fee, adds +0.1% to property sales and lowers the crypto fee every 10 levels. Hotels unlock at levels 5, 15, 25…, the Brokerage Firm at 10.</p>
+        <h3>🏠 Real estate</h3><p>${infoText("re")}</p>
+        <h3>📊 ETF</h3><p>${infoText("etf")}</p>
+        <h3>🪙 Gold</h3><p>${infoText("gold")}</p>
+        <h3>🏦 Broker ETF</h3><p>${infoText("petf")}</p>
+        <h3>📡 Live trading (crypto)</h3><p>${infoText("crypto")}</p>
+        <p class="muted">Chart tools: Line or Candles (1 min, 5 min, 15 min, 4 hours), volume bars, and MA5 / MA10 / MA20 / MA50 moving averages. Hover the chart for details.</p>`;
+    }
+
+    function wikiLogistics() {
+      const fleetRow = (k) => { const F = FLEETS[k]; const mins = F.routes.map(r => r.min), maxs = F.routes.map(r => r.max);
+        return [`${F.icon} ${F.label}`, fmt(F.price), F.slots, `${Math.min(...mins)}–${Math.max(...maxs)} min`, F.unlock ? `Own ${F.unlock.tankers} oil tankers` : "Always", `Level ${AGENT_LEVEL[k]}`]; };
+      return `<h2>🚢 Logistics</h2>
+        <p>Buy vehicles, then pick one of 4 contract offers for each. When the trip ends, the contract is paid to your money and a new set of offers appears.
+          Trips only move while the game is open.</p>
+        ${wt(["Fleet", "Price", "Slots", "Trip length", "Unlock", "🤖 Agent unlock"], ["truck", "tanker", "plane"].map(fleetRow))}
+        <h3>🚚 Logistics level</h3>
+        <p>XP for every delivered contract: contract minutes × 1 (truck), × 3 (tanker), × 6 (plane). The level unlocks the <b>Logistics agents</b>:
+          turn one on and it picks a random contract 5 seconds after the offers appear, for 2% of that contract's profit.</p>
+        <h3>🚛 Semi-trucks</h3><p>${infoText("truck")}</p>
+        <h3>🛢️ Oil tankers</h3><p>${infoText("logi")}</p>
+        <h3>✈️ Cargo planes</h3><p>${infoText("plane")}</p>
+        <h3>🗺️ World map</h3>
+        <p>Shows every vehicle moving along its route (trucks on roads, tankers on sea lanes, planes on flight paths), and every contract city as a dot in the fleet's color.
+          Hover a vehicle or city for details. A glowing ring means a vehicle is on its way there.</p>
+        <h3>Bonuses</h3>
+        <ul><li>📦 Warehouses: +2% on truck contracts each (max 5).</li><li>⚓ Trading Port: +2.5% on tanker contracts and ${PORT_PER_TANKER} / sec per tanker.</li>
+          <li>🚢 Global Empire prestige: keep your fleet on resets; level 2 halves every contract's time.</li></ul>`;
+    }
+
+    function wikiAchievements() {
+      return `<h2>🏆 Achievements</h2>
+        <p>${ACHIEVEMENTS.length} achievements in ${ACH_CATEGORIES.length} categories. They are checked every second, kept forever (also through prestige) and shown with progress bars in the 🏆 tab.</p>
+        ${ACH_CATEGORIES.map(c => `<h3>${c.name}</h3>` + wt(["", "Achievement", "Goal", ""],
+          ACHIEVEMENTS.filter(a => a.cat === c.id).map(a => [a.icon, `<b>${a.name}</b>`, a.desc, state.achievements[a.id] ? "✅" : ""]))).join("")}`;
+    }
+
+    function wikiShop() {
+      return `<h2>🛍️ Shop</h2>
+        <p>Cosmetics only: they change how the game looks, not how it plays. Each item belongs to a collection and a slot (background or coin). You can wear one item per slot and switch any time in the Shop.</p>
+        ${wt(["Item", "Collection", "Slot", "Price", ""], COSMETICS.map(c => [`<b>${c.name}</b><br><span class="muted">${c.desc}</span>`,
+          (COLLECTIONS.find(x => x.id === c.collection) || {}).name || "", c.slot, fmt(c.price), state.cosmetics.owned[c.id] ? "✅ owned" : ""]))}
+        <p class="muted">Wearing the coin and background from the same collection unlocks the 🎨 "Dressed to impress" achievement.</p>`;
+    }
+
+    const WIKI_RENDER = { general: wikiGeneral, income: wikiIncome, casino: wikiCasino, investing: wikiInvesting, logistics: wikiLogistics, achievements: wikiAchievements, shop: wikiShop };
+    function renderWiki() {
+      const page = WIKI_RENDER[state.wikiPage] ? state.wikiPage : "general";
+      $("wikiNav").innerHTML = WIKI_SECTIONS.map(s => `<button class="subTab ${s.id === page ? "active" : ""}" data-wiki="${s.id}">${s.name}</button>`).join("");
+      $("wikiBody").innerHTML = WIKI_RENDER[page]();
+    }
+    $("wikiNav").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-wiki]");
+      if (!b) return;
+      state.wikiPage = b.dataset.wiki;
+      renderWiki(); save();
+      $("wikiView").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;
 
@@ -7393,7 +7618,7 @@
     updateInvestLive();
     renderCosmetics(); applyCosmetics();
     renderTankers(); updateAgentButton(); updateLogiLevel();
-    showView(["casino", "invest", "shop", "logistics", "achievements"].includes(state.view) ? state.view : "income");
+    showView(["casino", "invest", "shop", "logistics", "achievements", "wiki"].includes(state.view) ? state.view : "income");
     if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
     else if (state.pendingTaxId !== null) {
       const d = state.taxDebts.find(x => x.id === state.pendingTaxId);

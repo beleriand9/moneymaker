@@ -47,10 +47,10 @@
     .artResult { display: flex; gap: 18px; align-items: center; margin-top: 14px; padding: 12px; border-radius: 12px; background: rgba(255, 211, 77, 0.08); border: 1px solid rgba(255, 211, 77, 0.4); }
     .artScore { font-size: 40px; font-weight: 900; color: #ffd34d; text-align: center; line-height: 1; }
     .artScore small { display: block; font-size: 12px; color: #9a9ab0; }
-    .artGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 12px; }
+    .artGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
     .artCard { padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); display: grid; gap: 8px; }
     .artPair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .artPair img { width: 100%; border-radius: 6px; display: block; }
+    .artPair img, .artCopy { width: 100%; border-radius: 6px; display: block; }
     @media (max-width: 700px) { .artBoards { grid-template-columns: 1fr; } .artResult { flex-direction: column; text-align: center; } }
     #wikiView { max-width: 1100px; margin: 0 auto; padding: 20px; }
     .wikiBody h2 { margin: 0 0 10px; }
@@ -8128,8 +8128,8 @@
       const total = a.items.reduce((s, x) => s + x.value, 0);
       $("artGrid").innerHTML = a.items.length ? `<div class="muted" style="grid-column:1/-1">Collection value: <b>${fmt(total)}</b></div>` + a.items.map(it => {
         const t = ART_TIERS[it.tier];
-        return `<div class="artCard"><div class="artPair"><img src="${artCanvasOf(it.tier, it.seed, 160).toDataURL()}" alt="Original"><img src="${it.img}" alt="Your copy"></div>
-          <div class="row"><span>${t.icon} ${t.name} · <b>${it.score.toFixed(1)}%</b></span><b class="income">${fmt(it.value)}</b></div>
+        return `<div class="artCard"><img class="artCopy" src="${it.img}" alt="Your copy" title="${t.name} painting">
+          <div class="row"><b>${it.score.toFixed(1)}%</b><b class="income">${fmt(it.value)}</b></div>
           <button class="btn ghost small" data-asell="${it.id}">💰 Sell</button></div>`;
       }).join("") : `<div class="muted">No paintings yet. Make a copy in the 🎨 Art studio and choose "Keep".</div>`;
     }

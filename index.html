@@ -189,7 +189,20 @@
     .gameCard:hover { border-color: #ffd34d; }
 
     /* ================= Investing ================= */
-    #investView { max-width: 900px; margin: 0 auto; padding: 20px; }
+    #investView { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .subLayout { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: start; }
+    .subNav { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 8px; }
+    .subTab { text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12);
+              background: rgba(255,255,255,0.04); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+    .subTab:hover { background: rgba(255,255,255,0.09); }
+    .subTab.active { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
+    .subMain > div > .card:first-child { margin-top: 0; }
+    #investPane[hidden], #livePane[hidden] { display: none; }
+    @media (max-width: 760px) {
+      .subLayout { grid-template-columns: 1fr; }
+      .subNav { position: static; flex-direction: row; }
+      .subTab { flex: 1; text-align: center; }
+    }
     .levelCard { gap: 16px; justify-content: flex-start; }
     .levelCard .levelNum {
       width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
@@ -1120,126 +1133,139 @@
     </div>
     <div id="investMsg" class="flash"></div>
 
-    <!-- Real estate -->
-    <div class="card">
-      <div class="row"><h3>🏠 Real estate</h3>
-        <button class="btn ghost small" data-info="re">ℹ️ Info</button></div>
-      <div class="muted infoBox" id="info-re" hidden>Safe, steady income: earns 1.2% of its value as rent every 45 seconds (about +80% per hour, paid to your money).
-        Locked for 20 minutes after buying, then sell any time with no fee.
-        Min. 50,000. ⚠️ Each second there is a small 1 in 21,600 chance (about once every 6 hours) of a market crash: all properties lose 70% of their value.</div>
-      <div class="moneyRow">
-        <input id="reAmount" type="number" min="50000" placeholder="Amount (min 50,000)">
-        <button class="btn ghost small" data-invpct="re" data-pct="0.25">25%</button>
-        <button class="btn ghost small" data-invpct="re" data-pct="0.5">50%</button>
-        <button class="btn ghost small" data-invpct="re" data-pct="1">All</button>
-        <button class="btn" id="reBuy">Buy property</button>
-      </div>
-      <div id="reList" style="margin-top:10px"></div>
-    </div>
+    <!-- Two pages: classic investments and live crypto trading -->
+    <div class="subLayout">
+      <nav class="subNav">
+        <button class="subTab active" data-isub="invest">📈 Investing</button>
+        <button class="subTab" data-isub="live">📡 Live trading</button>
+      </nav>
+      <div class="subMain">
+        <div id="investPane">
+            <!-- Real estate -->
+            <div class="card">
+              <div class="row"><h3>🏠 Real estate</h3>
+                <button class="btn ghost small" data-info="re">ℹ️ Info</button></div>
+              <div class="muted infoBox" id="info-re" hidden>Safe, steady income: earns 1.2% of its value as rent every 45 seconds (about +80% per hour, paid to your money).
+                Locked for 20 minutes after buying, then sell any time with no fee.
+                Min. 50,000. ⚠️ Each second there is a small 1 in 21,600 chance (about once every 6 hours) of a market crash: all properties lose 70% of their value.</div>
+              <div class="moneyRow">
+                <input id="reAmount" type="number" min="50000" placeholder="Amount (min 50,000)">
+                <button class="btn ghost small" data-invpct="re" data-pct="0.25">25%</button>
+                <button class="btn ghost small" data-invpct="re" data-pct="0.5">50%</button>
+                <button class="btn ghost small" data-invpct="re" data-pct="1">All</button>
+                <button class="btn" id="reBuy">Buy property</button>
+              </div>
+              <div id="reList" style="margin-top:10px"></div>
+            </div>
 
-    <!-- ETF -->
-    <div class="card">
-      <div class="row"><h3>📊 Stock market ETF</h3>
-        <button class="btn ghost small" data-info="etf">ℹ️ Info</button></div>
-      <div class="muted infoBox" id="info-etf" hidden>Every 10 seconds the market moves: 1 in 10 chance of −4%, 1 in 10 chance of +4%, otherwise 50/50 between +1.5% and −1%.
-        Min. 1,000 per investment. Cash-out fee: <span id="etfFeeInline"></span> (lower with every investor level).</div>
-      <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
-        <div><div class="muted">Your ETF</div><div class="bigValue" id="etfValue">0</div></div>
-        <div><div class="muted">Invested</div><div class="bigValue" id="etfInvested">0</div></div>
-        <div><div class="muted">Profit / loss</div><div class="bigValue" id="etfPL">–</div>
-          <div class="muted" id="etfPLFee" style="font-size:12px"></div></div>
-        <div><div class="muted">Last move</div><div class="bigValue" id="etfLast">–</div></div>
-        <div><div class="muted">Next move in</div><div class="bigValue" id="etfTimer">10s</div></div>
-      </div>
-      <div class="chartBox" id="etfChart"></div>
-      <div id="etfHistory"></div>
-      <div class="moneyRow">
-        <input id="etfAmount" type="number" min="1000" placeholder="Amount (min 1,000)">
-        <button class="btn ghost small" data-invpct="etf" data-pct="0.25">25%</button>
-        <button class="btn ghost small" data-invpct="etf" data-pct="0.5">50%</button>
-        <button class="btn ghost small" data-invpct="etf" data-pct="1">All</button>
-        <button class="btn" id="etfBuy">Invest</button>
-      </div>
-      <div class="moneyRow">
-        <input id="etfSellAmount" type="number" min="1" placeholder="Cash-out amount">
-        <button class="btn ghost" id="etfSell">Cash out</button>
-        <button class="btn ghost" id="etfSellAll">Cash out all</button>
-        <span class="muted" id="etfSellPreview"></span>
-      </div>
-    </div>
+            <!-- ETF -->
+            <div class="card">
+              <div class="row"><h3>📊 Stock market ETF</h3>
+                <button class="btn ghost small" data-info="etf">ℹ️ Info</button></div>
+              <div class="muted infoBox" id="info-etf" hidden>Every 10 seconds the market moves: 1 in 10 chance of −4%, 1 in 10 chance of +4%, otherwise 50/50 between +1.5% and −1%.
+                Min. 1,000 per investment. Cash-out fee: <span id="etfFeeInline"></span> (lower with every investor level).</div>
+              <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
+                <div><div class="muted">Your ETF</div><div class="bigValue" id="etfValue">0</div></div>
+                <div><div class="muted">Invested</div><div class="bigValue" id="etfInvested">0</div></div>
+                <div><div class="muted">Profit / loss</div><div class="bigValue" id="etfPL">–</div>
+                  <div class="muted" id="etfPLFee" style="font-size:12px"></div></div>
+                <div><div class="muted">Last move</div><div class="bigValue" id="etfLast">–</div></div>
+                <div><div class="muted">Next move in</div><div class="bigValue" id="etfTimer">10s</div></div>
+              </div>
+              <div class="chartBox" id="etfChart"></div>
+              <div id="etfHistory"></div>
+              <div class="moneyRow">
+                <input id="etfAmount" type="number" min="1000" placeholder="Amount (min 1,000)">
+                <button class="btn ghost small" data-invpct="etf" data-pct="0.25">25%</button>
+                <button class="btn ghost small" data-invpct="etf" data-pct="0.5">50%</button>
+                <button class="btn ghost small" data-invpct="etf" data-pct="1">All</button>
+                <button class="btn" id="etfBuy">Invest</button>
+              </div>
+              <div class="moneyRow">
+                <input id="etfSellAmount" type="number" min="1" placeholder="Cash-out amount">
+                <button class="btn ghost" id="etfSell">Cash out</button>
+                <button class="btn ghost" id="etfSellAll">Cash out all</button>
+                <span class="muted" id="etfSellPreview"></span>
+              </div>
+            </div>
 
-    <!-- Gold -->
-    <div class="card">
-      <div class="row"><h3>🪙 Gold</h3>
-        <button class="btn ghost small" data-info="gold">ℹ️ Info</button></div>
-      <div class="muted infoBox" id="info-gold" hidden>The safest, slowest investment. Gold moves together with the stock market, every 10 seconds:
-        24% chance of +0.4%, 41% chance of +0.2%, 35% chance of −0.15%. That is about <b>+50–60% per hour</b>, and it almost never loses over a few minutes.
-        Min. 1,000. <b>No cash-out fee</b>. After you sell gold, you have to wait <b>5 minutes</b> before selling again.</div>
-      <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
-        <div><div class="muted">Your gold</div><div class="bigValue" id="goldValue">0</div></div>
-        <div><div class="muted">Invested</div><div class="bigValue" id="goldInvested">0</div></div>
-        <div><div class="muted">Profit / loss</div><div class="bigValue" id="goldPL">–</div></div>
-        <div><div class="muted">Last move</div><div class="bigValue" id="goldLast">–</div></div>
-      </div>
-      <div class="chartBox" id="goldChart"></div>
-      <div class="moneyRow">
-        <input id="goldAmount" type="number" min="1000" placeholder="Amount (min 1,000)">
-        <button class="btn ghost small" data-invpct="gold" data-pct="0.25">25%</button>
-        <button class="btn ghost small" data-invpct="gold" data-pct="0.5">50%</button>
-        <button class="btn ghost small" data-invpct="gold" data-pct="1">All</button>
-        <button class="btn" id="goldBuy">Buy gold</button>
-      </div>
-      <div class="moneyRow">
-        <input id="goldSellAmount" type="number" min="1" placeholder="Cash-out amount">
-        <button class="btn ghost" id="goldSell">Cash out</button>
-        <button class="btn ghost" id="goldSellAll">Cash out all (no fee)</button>
-        <span class="muted" id="goldCooldown"></span>
-      </div>
-    </div>
+            <!-- Gold -->
+            <div class="card">
+              <div class="row"><h3>🪙 Gold</h3>
+                <button class="btn ghost small" data-info="gold">ℹ️ Info</button></div>
+              <div class="muted infoBox" id="info-gold" hidden>The safest, slowest investment. Gold moves together with the stock market, every 10 seconds:
+                24% chance of +0.4%, 41% chance of +0.2%, 35% chance of −0.15%. That is about <b>+50–60% per hour</b>, and it almost never loses over a few minutes.
+                Min. 1,000. <b>No cash-out fee</b>. After you sell gold, you have to wait <b>5 minutes</b> before selling again.</div>
+              <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
+                <div><div class="muted">Your gold</div><div class="bigValue" id="goldValue">0</div></div>
+                <div><div class="muted">Invested</div><div class="bigValue" id="goldInvested">0</div></div>
+                <div><div class="muted">Profit / loss</div><div class="bigValue" id="goldPL">–</div></div>
+                <div><div class="muted">Last move</div><div class="bigValue" id="goldLast">–</div></div>
+              </div>
+              <div class="chartBox" id="goldChart"></div>
+              <div class="moneyRow">
+                <input id="goldAmount" type="number" min="1000" placeholder="Amount (min 1,000)">
+                <button class="btn ghost small" data-invpct="gold" data-pct="0.25">25%</button>
+                <button class="btn ghost small" data-invpct="gold" data-pct="0.5">50%</button>
+                <button class="btn ghost small" data-invpct="gold" data-pct="1">All</button>
+                <button class="btn" id="goldBuy">Buy gold</button>
+              </div>
+              <div class="moneyRow">
+                <input id="goldSellAmount" type="number" min="1" placeholder="Cash-out amount">
+                <button class="btn ghost" id="goldSell">Cash out</button>
+                <button class="btn ghost" id="goldSellAll">Cash out all (no fee)</button>
+                <span class="muted" id="goldCooldown"></span>
+              </div>
+            </div>
 
-    <!-- Broker ETF (needs a Brokerage Firm) -->
-    <div class="card" id="petfCard">
-      <div class="row"><h3>🏦 Broker ETF</h3>
-        <button class="btn ghost small" data-info="petf">ℹ️ Info</button></div>
-      <div class="muted infoBox" id="info-petf" hidden>Only for owners of a Brokerage Firm. Works like the normal ETF, with better wins:
-        every 10 seconds, 1 in 10 chance of −4%, 1 in 10 chance of +5%, otherwise 50/50 between +2% and −1%.
-        <b>No cash-out fee.</b> One slot: you invest once (min. 1,000, max. 10,000,000), and cash out everything before investing again. Your investment can still grow past 10M.</div>
-      <div id="petfLocked" class="muted" style="margin-top:8px">🔒 Buy a 🏦 Brokerage Firm (Income tab, needs investor level 10) to unlock.</div>
-      <div id="petfBody" hidden>
-        <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
-          <div><div class="muted">Your Broker ETF</div><div class="bigValue" id="petfValue">0</div></div>
-          <div><div class="muted">Invested</div><div class="bigValue" id="petfInvested">0</div></div>
-          <div><div class="muted">Profit / loss</div><div class="bigValue" id="petfPL">–</div></div>
-          <div><div class="muted">Last move</div><div class="bigValue" id="petfLast">–</div></div>
-          <div><div class="muted">Next move in</div><div class="bigValue" id="petfTimer">–</div></div>
+            <!-- Broker ETF (needs a Brokerage Firm) -->
+            <div class="card" id="petfCard">
+              <div class="row"><h3>🏦 Broker ETF</h3>
+                <button class="btn ghost small" data-info="petf">ℹ️ Info</button></div>
+              <div class="muted infoBox" id="info-petf" hidden>Only for owners of a Brokerage Firm. Works like the normal ETF, with better wins:
+                every 10 seconds, 1 in 10 chance of −4%, 1 in 10 chance of +5%, otherwise 50/50 between +2% and −1%.
+                <b>No cash-out fee.</b> One slot: you invest once (min. 1,000, max. 10,000,000), and cash out everything before investing again. Your investment can still grow past 10M.</div>
+              <div id="petfLocked" class="muted" style="margin-top:8px">🔒 Buy a 🏦 Brokerage Firm (Income tab, needs investor level 10) to unlock.</div>
+              <div id="petfBody" hidden>
+                <div class="row" style="margin-top:10px; justify-content:flex-start; gap:20px; flex-wrap:wrap">
+                  <div><div class="muted">Your Broker ETF</div><div class="bigValue" id="petfValue">0</div></div>
+                  <div><div class="muted">Invested</div><div class="bigValue" id="petfInvested">0</div></div>
+                  <div><div class="muted">Profit / loss</div><div class="bigValue" id="petfPL">–</div></div>
+                  <div><div class="muted">Last move</div><div class="bigValue" id="petfLast">–</div></div>
+                  <div><div class="muted">Next move in</div><div class="bigValue" id="petfTimer">–</div></div>
+                </div>
+                <div class="chartBox" id="petfChart"></div>
+                <div id="petfHistory" class="etfHist"></div>
+                <div class="moneyRow" id="petfBuyRow">
+                  <input id="petfAmount" type="number" min="1000" max="10000000" placeholder="1,000 – 10,000,000">
+                  <button class="btn ghost small" data-invpct="petf" data-pct="0.25">25%</button>
+                  <button class="btn ghost small" data-invpct="petf" data-pct="0.5">50%</button>
+                  <button class="btn ghost small" data-invpct="petf" data-pct="1">All</button>
+                  <button class="btn" id="petfBuy">Invest</button>
+                </div>
+                <div class="moneyRow" id="petfSellRow">
+                  <button class="btn ghost" id="petfSell">Cash out all (no fee)</button>
+                  <span class="muted">One slot: cash out to invest again.</span>
+                </div>
+              </div>
+            </div>
         </div>
-        <div class="chartBox" id="petfChart"></div>
-        <div id="petfHistory" class="etfHist"></div>
-        <div class="moneyRow" id="petfBuyRow">
-          <input id="petfAmount" type="number" min="1000" max="10000000" placeholder="1,000 – 10,000,000">
-          <button class="btn ghost small" data-invpct="petf" data-pct="0.25">25%</button>
-          <button class="btn ghost small" data-invpct="petf" data-pct="0.5">50%</button>
-          <button class="btn ghost small" data-invpct="petf" data-pct="1">All</button>
-          <button class="btn" id="petfBuy">Invest</button>
-        </div>
-        <div class="moneyRow" id="petfSellRow">
-          <button class="btn ghost" id="petfSell">Cash out all (no fee)</button>
-          <span class="muted">One slot: cash out to invest again.</span>
+        <div id="livePane" hidden>
+            <!-- Live crypto market (real prices from Binance, or Coinbase as a backup) -->
+            <div class="card" id="cryptoCard">
+              <div class="row"><h3>📡 Live crypto market</h3>
+                <span><span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
+                <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
+              <div class="muted infoBox" id="info-crypto" hidden>Trade <b>Bitcoin, Ethereum and Solana at their real, live prices</b> (1 US dollar = 1 bcoin),
+                streamed every second from Binance (or Coinbase if Binance isn't reachable). Prices move with the real market, 24/7, up or down.
+                <br><br><b>Fee:</b> 2% on every buy and sell, 0.1% less for every 10 Investor levels (level 10, 20, 30…). At Investor level 99 trading is free.
+                <br><b>XP:</b> every trade gives Investor XP based on its size (1,000 → 1 XP, 1 scoin → 4 XP, 1 gcoin → 10 XP), at most once a minute.
+                Coins you hold also count as invested money for the per-minute Investor XP. Min. trade 1,000. Trading pauses if the live prices stop.</div>
+              <div class="muted" id="cryptoFeeText" style="margin-top:6px"></div>
+              <div id="cryptoList"></div>
+            </div>
         </div>
       </div>
-    </div>
-    <!-- Live crypto market (real prices from Binance, or Coinbase as a backup) -->
-    <div class="card" id="cryptoCard">
-      <div class="row"><h3>📡 Live crypto market</h3>
-        <span><span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
-        <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
-      <div class="muted infoBox" id="info-crypto" hidden>Trade <b>Bitcoin, Ethereum and Solana at their real, live prices</b> (1 US dollar = 1 bcoin),
-        streamed every second from Binance (or Coinbase if Binance isn't reachable). Prices move with the real market, 24/7, up or down.
-        <br><br><b>Fee:</b> 2% on every buy and sell, 0.1% less for every 10 Investor levels (level 10, 20, 30…). At Investor level 99 trading is free.
-        <br><b>XP:</b> every trade gives Investor XP based on its size (1,000 → 1 XP, 1 scoin → 4 XP, 1 gcoin → 10 XP), at most once a minute.
-        Coins you hold also count as invested money for the per-minute Investor XP. Min. trade 1,000. Trading pauses if the live prices stop.</div>
-      <div class="muted" id="cryptoFeeText" style="margin-top:6px"></div>
-      <div id="cryptoList"></div>
     </div>
   </section>
 
@@ -6319,7 +6345,7 @@
             <div><div class="muted">Worth</div><div class="bigValue" id="cval-${c.sym}">0</div></div>
             <div><div class="muted">Profit / loss</div><div class="bigValue" id="cpl-${c.sym}">–</div></div>
           </div>
-          <div class="chartBox" id="cchart-${c.sym}"></div>
+          <div class="chartBox" id="cchart-${c.sym}"><div class="muted" style="padding:24px; text-align:center">📈 The chart appears as live prices come in…</div></div>
           <div class="moneyRow">
             <input id="cbuy-${c.sym}" type="number" min="${CRYPTO_MIN}" placeholder="Amount (min 1,000)">
             <button class="btn ghost small" data-cpct="${c.sym}" data-pct="0.25">25%</button>
@@ -6377,6 +6403,19 @@
       const sell = e.target.closest("[data-csell]");
       if (sell) return cryptoSell(sell.dataset.csell, Number(sell.dataset.part));
     });
+    // Investing tab: switch between the classic investments and Live trading (remembered)
+    function showInvestPage(p) {
+      state.investPage = p === "live" ? "live" : "invest";
+      $("investPane").hidden = state.investPage !== "invest";
+      $("livePane").hidden = state.investPage !== "live";
+      document.querySelectorAll("[data-isub]").forEach(b => b.classList.toggle("active", b.dataset.isub === state.investPage));
+      if (state.investPage === "live") { renderCryptoNumbers(); for (const c of CRYPTOS) if (live[c.sym].hist.length > 1) drawChart("cchart-" + c.sym, live[c.sym].hist, "Live price · last hour + since you opened the game"); }
+    }
+    document.querySelector(".subNav").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-isub]");
+      if (b) { showInvestPage(b.dataset.isub); save(); }
+    });
+    showInvestPage(state.investPage);
     var cryptoReady = true;   // investCurrent("crypto") can run before this block during start-up
     renderCrypto();
     seedCryptoHistory();

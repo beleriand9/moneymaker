@@ -31,7 +31,27 @@
     }
 
     #incomeView { display: flex; }
-    #incomeView[hidden], #casinoView[hidden], #investView[hidden], #shopView[hidden], #logisticsView[hidden], #wikiView[hidden] { display: none; }
+    #incomeView[hidden], #casinoView[hidden], #investView[hidden], #shopView[hidden], #logisticsView[hidden], #wikiView[hidden], #artView[hidden] { display: none; }
+    #artView { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    #artStudio[hidden], #artCollection[hidden], #artOpen[hidden], #artLocked[hidden] { display: none; }
+    .artBoards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+    .artBoards canvas { width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; background: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.15); display: block; }
+    #artDraw { cursor: crosshair; touch-action: none; }
+    .artLabel { margin-bottom: 4px; font-weight: 700; }
+    .artTools { margin-top: 12px; }
+    .artPalette { display: flex; flex-wrap: wrap; gap: 6px; }
+    .artColor { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); cursor: pointer; }
+    .artColor.on { outline: 3px solid #ffd34d; outline-offset: 2px; }
+    .artToolRow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .sizeDot { display: inline-block; border-radius: 50%; background: currentColor; vertical-align: middle; }
+    .artResult { display: flex; gap: 18px; align-items: center; margin-top: 14px; padding: 12px; border-radius: 12px; background: rgba(255, 211, 77, 0.08); border: 1px solid rgba(255, 211, 77, 0.4); }
+    .artScore { font-size: 40px; font-weight: 900; color: #ffd34d; text-align: center; line-height: 1; }
+    .artScore small { display: block; font-size: 12px; color: #9a9ab0; }
+    .artGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 12px; }
+    .artCard { padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); display: grid; gap: 8px; }
+    .artPair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .artPair img { width: 100%; border-radius: 6px; display: block; }
+    @media (max-width: 700px) { .artBoards { grid-template-columns: 1fr; } .artResult { flex-direction: column; text-align: center; } }
     #wikiView { max-width: 1100px; margin: 0 auto; padding: 20px; }
     .wikiBody h2 { margin: 0 0 10px; }
     .wikiBody h3 { margin: 22px 0 8px; color: #ffd34d; }
@@ -946,6 +966,7 @@
     <button class="tab" data-view="casino">🎰 Casino</button>
     <button class="tab" data-view="invest">📈 Investing</button>
     <button class="tab" data-view="logistics">🚢 Logistics</button>
+    <button class="tab" data-view="art">🖼️ Art Gallery</button>
     <button class="tab" data-view="achievements">🏆 Achievements <span id="achTab"></span></button>
     <button class="tab" data-view="shop">🛍️ Shop</button>
     <button class="tab" data-view="wiki">📖 Wiki</button>
@@ -1177,6 +1198,53 @@
       <div class="stat"><div class="label">🏆 Achievements unlocked</div><div class="value" id="achTotal">0</div></div>
     </div>
     <div id="achList"></div>
+  </section>
+
+  <!-- ===== Art Gallery: copy paintings, sell them or keep them (filled in by JavaScript) ===== -->
+  <section id="artView" hidden>
+    <button class="debtBanner" hidden></button>
+    <div id="artLocked" class="card" style="text-align:center"></div>
+    <div id="artOpen" hidden>
+      <div class="subLayout">
+        <nav class="subNav" id="artNav">
+          <button class="subTab active" data-art="studio">🎨 Art studio</button>
+          <button class="subTab" data-art="collection">🖼️ Collection</button>
+        </nav>
+        <div class="subMain">
+          <div id="artStudio">
+            <div class="card">
+              <h3 style="margin:0 0 8px">🎨 Art studio</h3>
+              <span class="segGroup" id="artTiers"></span>
+              <div class="muted" id="artTierInfo" style="margin-top:6px"></div>
+              <div class="artBoards">
+                <div><div class="muted artLabel">Original</div><canvas id="artRef" width="320" height="240"></canvas></div>
+                <div><div class="muted artLabel">Your copy</div><canvas id="artDraw" width="320" height="240"></canvas></div>
+              </div>
+              <div class="artTools">
+                <div class="artPalette" id="artPalette"></div>
+                <div class="artToolRow">
+                  <span class="segGroup" id="artToolBtns"></span>
+                  <span class="segGroup" id="artSizes"></span>
+                  <button class="btn ghost small" id="artUndo">↶ Undo</button>
+                  <button class="btn ghost small" id="artClear">🗑️ Clear</button>
+                  <button class="btn ghost small" id="artNew">🔄 New painting</button>
+                  <button class="btn" id="artSubmit">✅ Submit copy</button>
+                </div>
+              </div>
+              <div id="artResult"></div>
+            </div>
+          </div>
+          <div id="artCollection" hidden>
+            <div class="card">
+              <div class="row"><h3 style="margin:0">🖼️ Collection <span class="muted" id="artSlots"></span></h3>
+                <button class="btn" id="artBuySlots"></button></div>
+              <div class="muted" style="margin-top:6px">Paintings you kept. Sell any of them later for its value.</div>
+              <div class="artGrid" id="artGrid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ===== Wiki: how to play (filled in by JavaScript) ===== -->
@@ -2511,6 +2579,8 @@
       $("logisticsView").hidden = view !== "logistics";
       $("achievementsView").hidden = view !== "achievements";
       $("wikiView").hidden = view !== "wiki";
+      $("artView").hidden = view !== "art";
+      if (view === "art" && typeof renderArt === "function") renderArt();
       if (view === "wiki" && typeof renderWiki === "function") renderWiki();
       if (view === "achievements" && typeof renderAchievements === "function") renderAchievements();
       document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
@@ -7510,7 +7580,7 @@
     const WIKI_SECTIONS = [
       { id: "general", name: "⭐ General" }, { id: "income", name: "💰 Income" }, { id: "casino", name: "🎰 Casino" },
       { id: "investing", name: "📈 Investing" }, { id: "logistics", name: "🚢 Logistics" },
-      { id: "achievements", name: "🏆 Achievements" }, { id: "shop", name: "🛍️ Shop" },
+      { id: "art", name: "🖼️ Art Gallery" }, { id: "achievements", name: "🏆 Achievements" }, { id: "shop", name: "🛍️ Shop" },
     ];
     const wt = (head, rows) => `<table class="wikiTable"><thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>
       <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
@@ -7530,6 +7600,7 @@
           ["🎰 Casino", "Move money into casino chips and play table games"],
           ["📈 Investing", "Real estate, ETFs, gold, Broker ETF and live crypto trading"],
           ["🚢 Logistics", "Trucks, oil tankers and cargo planes on contracts, with a world map"],
+          ["🖼️ Art Gallery", "Copy paintings and sell them, or keep them in your collection"],
           ["🏆 Achievements", "Goals across the whole game"], ["🛍️ Shop", "Cosmetics: backgrounds and coins"], ["📖 Wiki", "This guide"]])}
         <h3>🧾 Taxes</h3>
         <p>Every second there is a 1 in ${Math.round(1 / TAX_CHANCE).toLocaleString()} chance of a tax inspection (and always after ${TAX_FORCED_AFTER / 60} minutes without one).
@@ -7697,7 +7768,22 @@
         <p class="muted">Wearing the coin and background from the same collection unlocks the 🎨 "Dressed to impress" achievement.</p>`;
     }
 
-    const WIKI_RENDER = { general: wikiGeneral, income: wikiIncome, casino: wikiCasino, investing: wikiInvesting, logistics: wikiLogistics, achievements: wikiAchievements, shop: wikiShop };
+    function wikiArt() {
+      return `<h2>🖼️ Art Gallery</h2>
+        <p>Copy a painting as closely as you can. The closer the match, the more your copy is worth. The gallery opens for <b>${fmt(ART_UNLOCK)}</b>.</p>
+        <h3>Tiers</h3>
+        ${wt(["Tier", "Paintings", "Full value"], Object.values(ART_TIERS).map(t => [`${t.icon} ${t.name}`, t.desc, fmt(t.value)]))}
+        <p>Your copy is worth <b>match % × the full value</b>: an 80% copy of a Hard painting is worth ${fmt(ART_TIERS.hard.value * 0.8)}. There is no timer.</p>
+        <h3>Tools</h3>
+        ${wt(["Tool", "What it does"], [["🖌️ Brush", "Paints with the selected color (4 sizes)"], ["🪣 Fill", "Fills an area of one color"], ["🧽 Eraser", "Paints white"], ["↶ Undo / 🗑️ Clear", "Takes back the last step / starts over"]])}
+        <h3>How the match is scored</h3>
+        <p>Both pictures are compared in small blocks. <b>🎨 Colors</b> checks that each part has the right color; <b>📐 Shapes</b> checks that the shapes are in the right places.
+          Small wobbles and being a few pixels off are forgiven (most of all on Easy), but missing parts and extra paint both cost points. An empty canvas scores 0%.</p>
+        <h3>Sell or keep</h3>
+        <p>After submitting, <b>sell</b> the copy for its value right away, or <b>keep</b> it in your 🖼️ Collection (no money now; sell it there any time for the same value).
+          The collection starts with ${ART_SLOTS_START} slots; each +${ART_SLOTS_STEP} slots costs ${fmt(ART_SLOT_PRICE)}, then ${fmt(ART_SLOT_PRICE + ART_SLOT_PRICE_STEP)}, ${fmt(ART_SLOT_PRICE + 2 * ART_SLOT_PRICE_STEP)}… A prestige resets the gallery.</p>`;
+    }
+    const WIKI_RENDER = { art: wikiArt, general: wikiGeneral, income: wikiIncome, casino: wikiCasino, investing: wikiInvesting, logistics: wikiLogistics, achievements: wikiAchievements, shop: wikiShop };
     function renderWiki() {
       const page = WIKI_RENDER[state.wikiPage] ? state.wikiPage : "general";
       $("wikiNav").innerHTML = WIKI_SECTIONS.map(s => `<button class="subTab ${s.id === page ? "active" : ""}" data-wiki="${s.id}">${s.name}</button>`).join("");
@@ -7710,6 +7796,394 @@
       renderWiki(); save();
       $("wikiView").scrollIntoView({ behavior: "smooth", block: "start" });
     });
+
+    /* =====================================================================
+       🖼️ ART GALLERY: copy a painting as closely as you can.
+       Unlock: 500k. Tiers: Easy (1 scoin), Medium (10 scoin), Hard (100 scoin): you earn match% of the value.
+       Sell right away, or keep the painting in your Collection (10 slots; +10 slots for 500k, 750k, 1M…).
+       Paintings are generated from a seed, using only the 16 colors of the player's palette.
+       ===================================================================== */
+    const ART_UNLOCK = 500000, ART_SLOTS_START = 10, ART_SLOTS_STEP = 10, ART_SLOT_PRICE = 500000, ART_SLOT_PRICE_STEP = 250000;
+    const ART_TIERS = {
+      easy:   { name: "Easy",   icon: "🟢", value: 1e6, desc: "3–4 simple shapes" },
+      medium: { name: "Medium", icon: "🟡", value: 1e7, desc: "Kid-style drawings: houses, flowers, trees, boats" },
+      hard:   { name: "Hard",   icon: "🔴", value: 1e8, desc: "Detailed scenes with many colors" },
+    };
+    const ART_PAL = {
+      white: "#ffffff", black: "#1b1b1b", gray: "#8d8d8d", red: "#e53935", orange: "#fb8c00", yellow: "#fdd835",
+      lime: "#8bc34a", green: "#2e7d32", teal: "#00897b", sky: "#81d4fa", blue: "#1e88e5", navy: "#1a237e",
+      purple: "#8e24aa", pink: "#f48fb1", brown: "#6d4c41", beige: "#ffe0b2",
+    };
+    const ART_W = 320, ART_H = 240;
+    if (!state.art) state.art = { unlocked: false, slots: ART_SLOTS_START, slotBuys: 0, items: [], tier: "easy", seed: 0, page: "studio", sold: 0 };
+
+    // Seeded random numbers, so a painting can be drawn again from its seed
+    function artRng(seed) {
+      let a = seed >>> 0;
+      return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    }
+    function paintArt(ctx, tier, seed) {
+      const R = artRng(seed), rnd = (a, b) => a + R() * (b - a), ri = (a, b) => Math.floor(rnd(a, b + 1)), pick = (arr) => arr[Math.floor(R() * arr.length)];
+      const P = ART_PAL;
+      const fill = (c) => { ctx.fillStyle = c; };
+      const rect = (c, x, y, w, h) => { fill(c); ctx.fillRect(x, y, w, h); };
+      const circ = (c, x, y, r) => { fill(c); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
+      const ell = (c, x, y, rx, ry, rot = 0) => { fill(c); ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); ctx.fill(); };
+      const poly = (c, pts) => { fill(c); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.closePath(); ctx.fill(); };
+      const line = (c, w, pts) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.stroke(); };
+      ctx.save();
+      rect(P.white, 0, 0, ART_W, ART_H);
+      if (tier === "easy") {
+        // 3–4 big shapes in different colors, spread over the canvas
+        const colors = ["red", "orange", "yellow", "green", "blue", "navy", "purple", "pink", "teal", "brown", "black", "lime"].sort(() => R() - 0.5);
+        const n = ri(3, 4), cells = [[0, 0], [1, 0], [0, 1], [1, 1]].sort(() => R() - 0.5);
+        for (let i = 0; i < n; i++) {
+          const [cx, cy] = cells[i], c = P[colors[i]], s = rnd(70, 105);
+          const x = cx * 160 + rnd(s / 2 + 8, 160 - s / 2 - 8), y = cy * 120 + rnd(s / 2 + 6, 120 - s / 2 - 6);
+          const kind = pick(["circle", "square", "rect", "triangle"]);
+          if (kind === "circle") circ(c, x, y, s / 2 * 0.9);
+          else if (kind === "square") rect(c, x - s / 2 * 0.85, y - s / 2 * 0.85, s * 0.85, s * 0.85);
+          else if (kind === "rect") rect(c, x - s * 0.6, y - s * 0.32, s * 1.2, s * 0.64);
+          else poly(c, [[x, y - s / 2], [x + s / 2, y + s / 2], [x - s / 2, y + s / 2]]);
+        }
+      } else if (tier === "medium") {
+        const scene = pick(["house", "flower", "tree", "boat"]);
+        const skyC = pick([P.sky, P.sky, P.white]);
+        rect(skyC, 0, 0, ART_W, ART_H);
+        if (scene !== "boat") rect(P.lime, 0, 185, ART_W, 55);
+        const sunX = pick([50, 270]), sunR = rnd(22, 30);
+        if (scene === "house") {
+          circ(P.yellow, sunX, 45, sunR);
+          const hx = rnd(95, 135), hw = rnd(110, 130), hy = 110, wall = pick([P.red, P.orange, P.yellow, P.beige, P.pink]);
+          rect(wall, hx, hy, hw, 80);
+          poly(pick([P.brown, P.red, P.navy]), [[hx - 12, hy], [hx + hw / 2, hy - rnd(55, 70)], [hx + hw + 12, hy]]);
+          rect(P.brown, hx + hw * 0.58, hy + 35, 26, 45);
+          rect(pick([P.blue, P.sky, P.yellow]), hx + hw * 0.14, hy + 20, 30, 28);
+        } else if (scene === "flower") {
+          circ(P.yellow, sunX, 45, sunR);
+          const fx = rnd(130, 190), fy = rnd(75, 95), pc = pick([P.red, P.pink, P.purple, P.orange, P.blue]), n = ri(5, 6);
+          rect(P.green, fx - 5, fy, 10, 190 - fy);
+          ell(P.green, fx - 24, fy + 70, 24, 10, -0.5); ell(P.green, fx + 24, fy + 90, 24, 10, 0.5);
+          for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; circ(pc, fx + Math.cos(a) * 26, fy + Math.sin(a) * 26, 18); }
+          circ(pick([P.yellow, P.brown, P.orange]), fx, fy, 16);
+        } else if (scene === "tree") {
+          circ(P.yellow, sunX, 45, sunR);
+          const tx = rnd(120, 200);
+          rect(P.brown, tx - 13, 120, 26, 70);
+          circ(P.green, tx, 100, 48); circ(P.green, tx - 38, 120, 32); circ(P.green, tx + 38, 120, 32);
+          if (R() < 0.7) for (let i = 0; i < ri(3, 5); i++) circ(P.red, tx + rnd(-50, 50), rnd(80, 130), 7);
+        } else {
+          rect(P.blue, 0, 160, ART_W, 80);
+          circ(P.yellow, sunX, 45, sunR);
+          const bx = rnd(100, 200);
+          poly(P.brown, [[bx - 70, 160], [bx + 70, 160], [bx + 48, 190], [bx - 48, 190]]);
+          rect(P.brown, bx - 3, 55, 6, 105);
+          poly(pick([P.white, P.red, P.orange]), [[bx + 6, 60], [bx + 6, 150], [bx + 70, 150]]);
+          poly(pick([P.yellow, P.pink, P.white]), [[bx - 6, 75], [bx - 6, 150], [bx - 55, 150]]);
+        }
+      } else {
+        // Hard: a layered landscape with many details and colors
+        const time = pick(["day", "sunset", "night"]);
+        const sky = time === "day" ? P.sky : time === "sunset" ? P.orange : P.navy;
+        rect(sky, 0, 0, ART_W, ART_H);
+        if (time === "sunset") rect(P.yellow, 0, 70, ART_W, 45);
+        if (time === "night") for (let i = 0; i < 18; i++) circ(P.white, rnd(5, 315), rnd(5, 110), rnd(1.2, 2.4));
+        circ(time === "night" ? P.beige : P.yellow, rnd(40, 280), rnd(30, 70), rnd(16, 24));
+        if (time !== "night") for (let i = 0; i < ri(2, 3); i++) { const cx = rnd(30, 290), cy = rnd(20, 60); circ(P.white, cx, cy, 13); circ(P.white, cx + 15, cy - 6, 15); circ(P.white, cx + 30, cy, 12); }
+        const far = time === "night" ? P.purple : P.gray, near = time === "night" ? P.navy : pick([P.purple, P.brown]);
+        const peaks = (c, base, hmin, hmax, step) => { const pts = [[0, ART_H]]; for (let x = 0; x <= ART_W; x += step) pts.push([x, base - (x / step) % 2 * rnd(hmin, hmax) - rnd(0, 10)]); pts.push([ART_W, ART_H]); poly(c, pts); };
+        peaks(far, 150, 40, 70, 40);
+        peaks(near, 170, 25, 45, 32);
+        rect(time === "night" ? P.green : P.lime, 0, 175, ART_W, 65);
+        rect(time === "night" ? P.navy : P.blue, rnd(10, 60), 192, rnd(110, 170), 26);
+        for (let i = 0; i < ri(4, 6); i++) { const x = rnd(10, 310), y = rnd(185, 230), h = rnd(28, 45); rect(P.brown, x - 3, y - 10, 6, 14); poly(P.green, [[x, y - h], [x + h * 0.35, y - 8], [x - h * 0.35, y - 8]]); }
+        const hx = rnd(200, 255), hy = 178;
+        rect(pick([P.red, P.beige, P.pink]), hx, hy, 46, 34); poly(P.brown, [[hx - 6, hy], [hx + 23, hy - 22], [hx + 52, hy]]);
+        rect(time === "night" ? P.yellow : P.sky, hx + 6, hy + 8, 11, 10); rect(P.black, hx + 28, hy + 14, 10, 20);
+        for (let i = 0; i < ri(2, 4); i++) { const bx = rnd(60, 260), by = rnd(70, 110); line(P.black, 2, [[bx - 7, by - 4], [bx, by], [bx + 7, by - 4]]); }
+        for (let i = 0; i < ri(5, 8); i++) circ(pick([P.red, P.yellow, P.pink, P.white]), rnd(5, 315), rnd(220, 236), 3);
+      }
+      ctx.restore();
+    }
+    function artCanvasOf(tier, seed, w = ART_W) {
+      const c = document.createElement("canvas"); c.width = ART_W; c.height = ART_H;
+      paintArt(c.getContext("2d"), tier, seed);
+      if (w === ART_W) return c;
+      const s = document.createElement("canvas"); s.width = w; s.height = Math.round(w * ART_H / ART_W);
+      s.getContext("2d").drawImage(c, 0, 0, s.width, s.height);
+      return s;
+    }
+
+    /* ----- Match score: compares the two pictures the way a person would.
+       Both are shrunk to 40×30 cells and softly blurred (so small wobbles and offsets of a few pixels don't matter).
+       Colors: how close each cell's color is (perceptual Lab distance).
+       Shapes: does each cell have the right palette color nearby (within one cell)?
+       Both are measured against an empty white canvas, so blank = 0% and a perfect copy = 100%. ----- */
+    const GW = 40, GH = 30;
+    function artGrid(canvas, passes = 1) {
+      const d = canvas.getContext("2d").getImageData(0, 0, ART_W, ART_H).data, cw = ART_W / GW, ch = ART_H / GH;
+      const g = new Float32Array(GW * GH * 3);
+      for (let y = 0; y < ART_H; y++) for (let x = 0; x < ART_W; x++) {
+        const i = (y * ART_W + x) * 4, k = (Math.floor(y / ch) * GW + Math.floor(x / cw)) * 3;
+        g[k] += d[i]; g[k + 1] += d[i + 1]; g[k + 2] += d[i + 2];
+      }
+      const n = cw * ch;
+      for (let k = 0; k < g.length; k++) g[k] /= n;
+      // soft blur: each cell is half itself, half its neighbours (Easy blurs twice: more forgiving)
+      let b = g;
+      for (let p = 0; p < passes; p++) b = artBlur(b);
+      return { raw: g, blur: b };
+    }
+    function artBlur(g) {
+      const b = new Float32Array(g.length);
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) for (let c = 0; c < 3; c++) {
+        let s = 0, w = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= GH || xx >= GW) continue;
+          const wt = dx === 0 && dy === 0 ? 4 : 1; s += g[(yy * GW + xx) * 3 + c] * wt; w += wt;
+        }
+        b[(y * GW + x) * 3 + c] = s / w;
+      }
+      return b;
+    }
+    function toLab(r, g, b) {
+      const f = (c) => { c /= 255; return c > 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92; };
+      const R = f(r), G = f(g), B = f(b);
+      let X = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047, Y = R * 0.2126 + G * 0.7152 + B * 0.0722, Z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+      const h = (t) => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+      X = h(X); Y = h(Y); Z = h(Z);
+      return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+    }
+    const PAL_LAB = Object.values(ART_PAL).map(hex => toLab(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)));
+    function nearestPal(lab) { let best = 0, bd = 1e9; PAL_LAB.forEach((p, i) => { const d = (p[0] - lab[0]) ** 2 + (p[1] - lab[1]) ** 2 + (p[2] - lab[2]) ** 2; if (d < bd) { bd = d; best = i; } }); return best; }
+    function artRaw(refG, cpyG, reach = 1) {
+      const lab = (arr, k) => toLab(arr[k], arr[k + 1], arr[k + 2]);
+      const side = (g) => { const L = [], I = []; for (let k = 0; k < GW * GH; k++) { L.push(lab(g.blur, k * 3)); I.push(nearestPal(lab(g.raw, k * 3))); } return { L, I }; };
+      const R = side(refG), C = side(cpyG);
+      // checks one direction: does every cell of A find its color / palette color nearby in B?
+      const dir = (A, B) => {
+        let col = 0, shp = 0;
+        for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+          const k = y * GW + x, a = A.L[k];
+          let dmin = 1e9, ok = 0;
+          for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
+            const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= GH || xx >= GW) continue;
+            const q = yy * GW + xx, b = B.L[q], d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+            if (d < dmin) dmin = d;
+            if (B.I[q] === A.I[k]) ok = 1;
+          }
+          col += Math.max(0, Math.min(1, 1 - (dmin - 6) / 50));
+          shp += ok;
+        }
+        return { col: col / (GW * GH), shp: shp / (GW * GH) };
+      };
+      // both ways: the copy must contain the original (nothing missing) AND the original must contain the copy (nothing extra)
+      const a = dir(R, C), b = dir(C, R);
+      return { col: Math.min(a.col, b.col) * 0.5 + (a.col + b.col) / 4, shp: Math.min(a.shp, b.shp) * 0.5 + (a.shp + b.shp) / 4 };
+    }
+    let blankCanvas = null;
+    // How forgiving each tier is: Easy accepts shapes up to 2 cells (16 px) off and blurs more
+    const ART_TOLERANCE = { easy: { passes: 2, reach: 2 }, medium: { passes: 1, reach: 1 }, hard: { passes: 1, reach: 1 } };
+    function artScore(refCanvas, copyCanvas, tier = "medium") {
+      const T = ART_TOLERANCE[tier] || ART_TOLERANCE.medium;
+      if (!blankCanvas) { blankCanvas = document.createElement("canvas"); blankCanvas.width = ART_W; blankCanvas.height = ART_H; const c = blankCanvas.getContext("2d"); c.fillStyle = "#fff"; c.fillRect(0, 0, ART_W, ART_H); }
+      const rg = artGrid(refCanvas, T.passes), cg = artGrid(copyCanvas, T.passes), bg = artGrid(blankCanvas, T.passes);
+      const got = artRaw(rg, cg, T.reach), base = artRaw(rg, bg, T.reach);
+      const norm = (v, b) => b >= 0.999 ? 1 : Math.max(0, Math.min(1, (v - b) / (1 - b)));
+      const colors = norm(got.col, base.col), shapes = norm(got.shp, base.shp);
+      return { colors, shapes, total: Math.round((colors * 0.5 + shapes * 0.5) * 1000) / 10 };   // one decimal, in %
+    }
+
+    /* ----- Drawing on the "Your copy" canvas: brush, fill bucket, eraser, undo, clear. Mouse and touch. ----- */
+    const ART_TOOLS = [{ id: "brush", label: "🖌️ Brush" }, { id: "fill", label: "🪣 Fill" }, { id: "eraser", label: "🧽 Eraser" }];
+    const ART_SIZES = [4, 10, 22, 44];
+    const artUI = { tool: "brush", color: "black", size: 10, undo: [], drawing: false, last: null, result: null };
+    const drawCtx = () => $("artDraw").getContext("2d", { willReadFrequently: true });
+    function artPushUndo() { const c = drawCtx(); artUI.undo.push(c.getImageData(0, 0, ART_W, ART_H)); if (artUI.undo.length > 25) artUI.undo.shift(); }
+    function artClearCanvas() { const c = drawCtx(); c.fillStyle = "#ffffff"; c.fillRect(0, 0, ART_W, ART_H); }
+    function artPos(e) { const r = $("artDraw").getBoundingClientRect(); return [(e.clientX - r.left) / r.width * ART_W, (e.clientY - r.top) / r.height * ART_H]; }
+    function artFlood(x, y, hex) {
+      const c = drawCtx(), img = c.getImageData(0, 0, ART_W, ART_H), d = img.data;
+      x = Math.floor(x); y = Math.floor(y);
+      if (x < 0 || y < 0 || x >= ART_W || y >= ART_H) return;
+      const i0 = (y * ART_W + x) * 4, sr = d[i0], sg = d[i0 + 1], sb = d[i0 + 2];
+      const nr = parseInt(hex.slice(1, 3), 16), ng = parseInt(hex.slice(3, 5), 16), nb = parseInt(hex.slice(5, 7), 16);
+      if (Math.abs(sr - nr) + Math.abs(sg - ng) + Math.abs(sb - nb) < 6) return;
+      const tol = 90, same = (i) => Math.abs(d[i] - sr) + Math.abs(d[i + 1] - sg) + Math.abs(d[i + 2] - sb) <= tol;
+      const seen = new Uint8Array(ART_W * ART_H), stack = [[x, y]];
+      while (stack.length) {
+        const [px, py] = stack.pop();
+        let lx = px; while (lx >= 0 && !seen[py * ART_W + lx] && same((py * ART_W + lx) * 4)) lx--;
+        lx++;
+        let up = false, down = false;
+        for (let cx = lx; cx < ART_W; cx++) {
+          const p = py * ART_W + cx, i = p * 4;
+          if (seen[p] || !same(i)) break;
+          seen[p] = 1; d[i] = nr; d[i + 1] = ng; d[i + 2] = nb; d[i + 3] = 255;
+          if (py > 0) { const q = p - ART_W; if (!seen[q] && same(q * 4)) { if (!up) { stack.push([cx, py - 1]); up = true; } } else up = false; }
+          if (py < ART_H - 1) { const q = p + ART_W; if (!seen[q] && same(q * 4)) { if (!down) { stack.push([cx, py + 1]); down = true; } } else down = false; }
+        }
+      }
+      c.putImageData(img, 0, 0);
+    }
+    function artStroke(a, b) {
+      const c = drawCtx();
+      c.strokeStyle = artUI.tool === "eraser" ? "#ffffff" : ART_PAL[artUI.color];
+      c.lineWidth = artUI.size; c.lineCap = "round"; c.lineJoin = "round";
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    }
+
+    function renderArtTools() {
+      $("artPalette").innerHTML = Object.entries(ART_PAL).map(([k, hex]) =>
+        `<button class="artColor ${artUI.color === k ? "on" : ""}" data-acolor="${k}" title="${k}" style="background:${hex}"></button>`).join("");
+      $("artToolBtns").innerHTML = ART_TOOLS.map(t => `<button class="seg ${artUI.tool === t.id ? "on" : ""}" data-atool="${t.id}">${t.label}</button>`).join("");
+      $("artSizes").innerHTML = ART_SIZES.map(s => `<button class="seg ${artUI.size === s ? "on" : ""}" data-asize="${s}" title="Brush size ${s}">
+        <span class="sizeDot" style="width:${Math.max(4, s / 2.2)}px;height:${Math.max(4, s / 2.2)}px"></span></button>`).join("");
+      $("artTiers").innerHTML = Object.entries(ART_TIERS).map(([k, t]) => `<button class="seg ${state.art.tier === k ? "on" : ""}" data-atier="${k}">${t.icon} ${t.name} · ${fmt(t.value)}</button>`).join("");
+      const t = ART_TIERS[state.art.tier];
+      $("artTierInfo").textContent = `${t.icon} ${t.name}: ${t.desc}. You earn your match % of ${fmt(t.value)}: an 85% copy is worth ${fmt(t.value * 0.85)}.`;
+    }
+    function artNewPainting(keepSeed) {
+      if (!keepSeed || !state.art.seed) state.art.seed = 1 + secureRandomInt(2 ** 31 - 2);
+      const ref = $("artRef").getContext("2d");
+      paintArt(ref, state.art.tier, state.art.seed);
+      artClearCanvas(); artUI.undo = []; artUI.result = null;
+      $("artResult").innerHTML = ""; $("artSubmit").disabled = false;
+      save();
+    }
+    function artSubmit() {
+      const score = artScore($("artRef"), $("artDraw"), state.art.tier);
+      const t = ART_TIERS[state.art.tier], value = Math.floor(t.value * score.total / 100);
+      const thumb = document.createElement("canvas"); thumb.width = 160; thumb.height = 120;
+      thumb.getContext("2d").drawImage($("artDraw"), 0, 0, 160, 120);
+      artUI.result = { tier: state.art.tier, seed: state.art.seed, score: score.total, colors: score.colors, shapes: score.shapes, value, img: thumb.toDataURL("image/jpeg", 0.7) };
+      $("artSubmit").disabled = true;
+      const full = state.art.items.length >= state.art.slots;
+      $("artResult").innerHTML = `<div class="artResult">
+        <div class="artScore">${score.total.toFixed(1)}%<small>match</small></div>
+        <div><div>🎨 Colors <b>${(score.colors * 100).toFixed(0)}%</b> · 📐 Shapes <b>${(score.shapes * 100).toFixed(0)}%</b></div>
+          <div class="muted">${score.total >= 90 ? "Masterpiece! 🏆" : score.total >= 75 ? "Great copy! 👏" : score.total >= 50 ? "Not bad. 🙂" : "Keep practicing. 🖌️"}
+            Worth <b>${fmt(value)}</b> (${score.total.toFixed(1)}% of ${fmt(t.value)}).</div>
+          <div class="moneyRow" style="margin-top:8px">
+            <button class="btn" id="artSell">💰 Sell for ${fmt(value)}</button>
+            <button class="btn ghost" id="artKeep" ${full ? "disabled" : ""}>🖼️ Keep in collection (${state.art.items.length}/${state.art.slots})</button>
+            ${full ? `<span class="muted">Collection full: buy more slots</span>` : ""}</div></div></div>`;
+    }
+    function artFinish(keep) {
+      const r = artUI.result;
+      if (!r) return;
+      if (keep) {
+        if (state.art.items.length >= state.art.slots) return;
+        state.art.items.unshift({ id: state.nextId++, tier: r.tier, seed: r.seed, score: r.score, value: r.value, img: r.img, at: Date.now() });
+        showNotice(`🖼️ Added to your collection (worth ${fmt(r.value)}).`);
+      } else {
+        state.money += r.value;
+        state.art.sold = (state.art.sold || 0) + 1;
+        clickedThisSecond += r.value;   // counts as income (taxes)
+        showNotice(`💰 Sold your copy for ${fmt(r.value)}!`);
+      }
+      updateCounter();
+      artNewPainting(false);
+    }
+
+    const artSlotPrice = () => ART_SLOT_PRICE + ART_SLOT_PRICE_STEP * (state.art.slotBuys || 0);
+    function renderArtCollection() {
+      const a = state.art;
+      $("artSlots").textContent = `(${a.items.length} / ${a.slots})`;
+      $("artBuySlots").textContent = `➕ ${ART_SLOTS_STEP} slots (${fmt(artSlotPrice())})`;
+      $("artBuySlots").disabled = state.money < artSlotPrice();
+      const total = a.items.reduce((s, x) => s + x.value, 0);
+      $("artGrid").innerHTML = a.items.length ? `<div class="muted" style="grid-column:1/-1">Collection value: <b>${fmt(total)}</b></div>` + a.items.map(it => {
+        const t = ART_TIERS[it.tier];
+        return `<div class="artCard"><div class="artPair"><img src="${artCanvasOf(it.tier, it.seed, 160).toDataURL()}" alt="Original"><img src="${it.img}" alt="Your copy"></div>
+          <div class="row"><span>${t.icon} ${t.name} · <b>${it.score.toFixed(1)}%</b></span><b class="income">${fmt(it.value)}</b></div>
+          <button class="btn ghost small" data-asell="${it.id}">💰 Sell</button></div>`;
+      }).join("") : `<div class="muted">No paintings yet. Make a copy in the 🎨 Art studio and choose "Keep".</div>`;
+    }
+    function showArtPage(p) {
+      state.art.page = p === "collection" ? "collection" : "studio";
+      $("artStudio").hidden = state.art.page !== "studio";
+      $("artCollection").hidden = state.art.page !== "collection";
+      document.querySelectorAll("[data-art]").forEach(b => b.classList.toggle("active", b.dataset.art === state.art.page));
+      if (state.art.page === "collection") renderArtCollection();
+    }
+    function renderArt() {
+      const open = state.art.unlocked;
+      $("artLocked").hidden = open; $("artOpen").hidden = !open;
+      if (!open) {
+        $("artLocked").innerHTML = `<h2>🖼️ Art Gallery</h2>
+          <p>Copy paintings as closely as you can: the better the match, the more they're worth. Sell your copies right away or keep them in your collection.</p>
+          <p class="muted">🟢 Easy ${fmt(ART_TIERS.easy.value)} · 🟡 Medium ${fmt(ART_TIERS.medium.value)} · 🔴 Hard ${fmt(ART_TIERS.hard.value)} (you earn your match %)</p>
+          <button class="btn big" id="artUnlock" ${state.money >= ART_UNLOCK ? "" : "disabled"}>🔓 Open the gallery for ${fmt(ART_UNLOCK)}</button>`;
+        return;
+      }
+      renderArtTools();
+      showArtPage(state.art.page);
+    }
+
+    // ----- events -----
+    $("artView").addEventListener("click", (e) => {
+      if (isPaused()) return;
+      if (e.target.closest("#artUnlock")) {
+        if (state.art.unlocked || state.money < ART_UNLOCK) return;
+        state.money -= ART_UNLOCK; state.art.unlocked = true;
+        updateCounter(); save(); renderArt(); artNewPainting(true);
+        showNotice("🖼️ The Art Gallery is open!");
+        return;
+      }
+      const nav = e.target.closest("[data-art]"); if (nav) { showArtPage(nav.dataset.art); save(); return; }
+      const col = e.target.closest("[data-acolor]"); if (col) { artUI.color = col.dataset.acolor; if (artUI.tool === "eraser") artUI.tool = "brush"; renderArtTools(); return; }
+      const tool = e.target.closest("[data-atool]"); if (tool) { artUI.tool = tool.dataset.atool; renderArtTools(); return; }
+      const size = e.target.closest("[data-asize]"); if (size) { artUI.size = Number(size.dataset.asize); renderArtTools(); return; }
+      const tier = e.target.closest("[data-atier]");
+      if (tier && tier.dataset.atier !== state.art.tier) { state.art.tier = tier.dataset.atier; renderArtTools(); artNewPainting(false); return; }
+      if (e.target.closest("#artUndo")) { const u = artUI.undo.pop(); if (u) drawCtx().putImageData(u, 0, 0); return; }
+      if (e.target.closest("#artClear")) { artPushUndo(); artClearCanvas(); return; }
+      if (e.target.closest("#artNew")) { artNewPainting(false); return; }
+      if (e.target.closest("#artSubmit")) { artSubmit(); return; }
+      if (e.target.closest("#artSell")) { artFinish(false); return; }
+      if (e.target.closest("#artKeep")) { artFinish(true); return; }
+      if (e.target.closest("#artBuySlots")) {
+        const price = artSlotPrice();
+        if (state.money < price) return;
+        state.money -= price; state.art.slots += ART_SLOTS_STEP; state.art.slotBuys = (state.art.slotBuys || 0) + 1;
+        updateCounter(); save(); renderArtCollection();
+        showNotice(`🖼️ Collection now has ${state.art.slots} slots.`);
+        return;
+      }
+      const sell = e.target.closest("[data-asell]");
+      if (sell) {
+        const it = state.art.items.find(x => x.id === Number(sell.dataset.asell));
+        if (!it) return;
+        state.art.items = state.art.items.filter(x => x !== it);
+        state.money += it.value; clickedThisSecond += it.value; state.art.sold = (state.art.sold || 0) + 1;
+        updateCounter(); save(); renderArtCollection();
+        showNotice(`💰 Sold a painting for ${fmt(it.value)}!`);
+      }
+    });
+    const artCanvas = $("artDraw");
+    artCanvas.addEventListener("pointerdown", (e) => {
+      if (isPaused() || artUI.result) return;
+      e.preventDefault();
+      const p = artPos(e);
+      artPushUndo();
+      if (artUI.tool === "fill") { artFlood(p[0], p[1], ART_PAL[artUI.color]); return; }
+      artUI.drawing = true; artUI.last = p;
+      artCanvas.setPointerCapture(e.pointerId);
+      artStroke(p, [p[0] + 0.01, p[1]]);
+    });
+    artCanvas.addEventListener("pointermove", (e) => {
+      if (!artUI.drawing) return;
+      const p = artPos(e); artStroke(artUI.last, p); artUI.last = p;
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(ev => artCanvas.addEventListener(ev, () => { artUI.drawing = false; }));
+    // keep the money-dependent buttons fresh
+    setInterval(() => {
+      if ($("artView").hidden) return;
+      if (!state.art.unlocked) { const b = $("artUnlock"); if (b) b.disabled = state.money < ART_UNLOCK; }
+      else if (!$("artCollection").hidden) $("artBuySlots").disabled = state.money < artSlotPrice();
+    }, 1000);
+    if (state.art.unlocked) { paintArt($("artRef").getContext("2d"), state.art.tier, state.art.seed || (state.art.seed = 1 + secureRandomInt(2 ** 31 - 2))); artClearCanvas(); }
 
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;
@@ -7725,7 +8199,7 @@
     updateInvestLive();
     renderCosmetics(); applyCosmetics();
     renderTankers(); updateAgentButton(); updateLogiLevel();
-    showView(["casino", "invest", "shop", "logistics", "achievements", "wiki"].includes(state.view) ? state.view : "income");
+    showView(["casino", "invest", "shop", "logistics", "achievements", "wiki", "art"].includes(state.view) ? state.view : "income");
     if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
     else if (state.pendingTaxId !== null) {
       const d = state.taxDebts.find(x => x.id === state.pendingTaxId);

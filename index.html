@@ -6578,6 +6578,7 @@
       investRecord("crypto", 0, got);
       const xp = value >= CRYPTO_MIN ? cryptoXp(value) : 0;
       const result = got - p.paid;
+      if (result > 0) state.stats.profitTrades = (state.stats.profitTrades || 0) + 1;   // for achievements
       logTrade({ sym: p.sym, side: p.side, lev: p.lev, entry: p.entry, exit: price, result, at: Date.now(), opened: p.at });
       cryptoMsg(p.sym, `Closed ${p.side === "long" ? "Long" : "Short"} ×${p.lev} for ${fmt(got)} (fee ${fmt(fee)}) · ${result >= 0 ? "profit +" : "loss −"}${fmt(Math.abs(result))}${xp ? ` · +${xp} XP` : ""}.`, result >= 0);
       updateCounter(); updateInvestLive(); save(); renderCryptoNumbers();
@@ -7165,6 +7166,9 @@
       { id: "gold10s",    cat: "invest", icon: "🪙", name: "Fort Knox",          desc: "10 scoin all-time gold profit",       goal: 10 * SC,  get: () => goldProfit(), money: true },
       { id: "petf10s",    cat: "invest", icon: "🏦", name: "Friends in high places", desc: "10 scoin all-time Broker ETF profit", goal: 10 * SC,  get: () => investProfit("petf"), money: true },
       { id: "petf100s",   cat: "invest", icon: "🏛️", name: "Wall Street insider", desc: "100 scoin all-time Broker ETF profit", goal: 100 * SC, get: () => investProfit("petf"), money: true },
+      { id: "trade1",     cat: "invest", icon: "📡", name: "First green trade",  desc: "Close 1 profitable trade in Live trading",    goal: 1,   get: () => state.stats.profitTrades || 0 },
+      { id: "trade10",    cat: "invest", icon: "📈", name: "Day trader",         desc: "Close 10 profitable trades in Live trading",  goal: 10,  get: () => state.stats.profitTrades || 0 },
+      { id: "trade100",   cat: "invest", icon: "🦈", name: "Market shark",       desc: "Close 100 profitable trades in Live trading", goal: 100, get: () => state.stats.profitTrades || 0 },
       { id: "gold1s",     cat: "invest", icon: "🥇", name: "Golden touch",       desc: "1 scoin all-time gold profit",        goal: SC, get: () => goldProfit(), money: true },
       { id: "petfFull",   cat: "invest", icon: "🏦", name: "Insider",            desc: "Fill the Broker ETF (10 scoin invested)", goal: 10 * SC, get: () => investCurrent("petf"), money: true },
       { id: "ilevel5",    cat: "invest", icon: "📈", name: "First steps",        desc: "Reach Investor level 5",              goal: 5,  get: () => levelInfo(inv.xp, INVEST_XP).level },

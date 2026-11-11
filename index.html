@@ -990,6 +990,16 @@
   <!-- ===== Logistics: oil tankers ===== -->
   <section id="logisticsView" hidden>
     <button class="debtBanner" hidden></button>
+    <div class="card row levelCard" id="logiLevel" style="gap:16px; justify-content:flex-start">
+      <div class="levelNum" id="logiLevelNum">1</div>
+      <div style="flex:1">
+        <div class="row"><b>🚚 Logistics level <span id="logiLevelText">1</span>
+            <button class="btn ghost small" data-levels="logistics" style="margin-left:6px">📋 All levels</button></b>
+          <span class="muted" id="logiPerkText"></span></div>
+        <div class="xpBar"><div class="xpFill" id="logiXpFill"></div></div>
+        <div class="muted" id="logiXpText"></div>
+      </div>
+    </div>
     <div class="card wallet">
       <div class="stat"><div class="label">💰 Your money</div><div class="value" id="logiMoney">0</div></div>
       <div class="stat"><div class="label">🚛 Trucks</div><div class="value chips" id="truckCount">0 / 15</div></div>
@@ -1007,7 +1017,7 @@
         Longer routes pay more per second. A truck earns back its price in about 1.5 hours. Trips only move while the game is open.
         <br><br>🔧 <b>Breakdowns:</b> after each delivery there is a 1 in 100 chance the truck breaks down. It can't take new contracts
         until you pay for repairs (500 – 5,000).
-        <br><br>🤖 <b>Logistics agent:</b> turn it on and it picks a random contract for any waiting truck 5 seconds after the offers appear.
+        <br><br>🤖 <b>Logistics agent</b> (unlocks at Logistics level 5): turn it on and it picks a random contract for any waiting truck 5 seconds after the offers appear.
         It charges 2% of that contract's profit, taken from your money the moment it picks. It waits if you can't afford the fee.</div>
       <div id="trucks" style="margin-top:12px"></div>
     </div>
@@ -1019,7 +1029,7 @@
         <b>4 contract offers</b>: pick one and the tanker sails. When it arrives, the whole contract is paid to your money.
         Then it gets 4 new offers. Longer routes pay more per second, and the two ocean crossings pay the most.
         A tanker earns back its price in about 3 hours. Voyages only move while the game is open.
-        <br><br>🤖 <b>Logistics agent:</b> turn it on and it picks a random contract for any waiting tanker 5 seconds after the offers appear.
+        <br><br>🤖 <b>Logistics agent</b> (unlocks at Logistics level 25): turn it on and it picks a random contract for any waiting tanker 5 seconds after the offers appear.
         It charges 2% of that contract's profit, taken from your money the moment it picks. It waits if you can't afford the fee.</div>
       <div id="tankers" style="margin-top:12px"></div>
     </div>
@@ -1032,7 +1042,7 @@
         if you keep it busy. Each free plane gets 4 contract offers.
         <br><br>⚡ <b>Express contracts:</b> sometimes one offer is an express job: 40% faster and 25% more per second, but it disappears
         after 30 seconds if you don't take it.
-        <br><br>🤖 <b>Logistics agent:</b> picks a random contract 5 seconds after the offers appear, for 2% of that contract's profit.</div>
+        <br><br>🤖 <b>Logistics agent</b> (unlocks at Logistics level 50): picks a random contract 5 seconds after the offers appear, for 2% of that contract's profit.</div>
       <div id="planes" style="margin-top:12px"></div>
     </div>
   </section>
@@ -2410,6 +2420,20 @@
     // INVEST_XP[L] = total Investor XP needed to reach level L
     const INVEST_XP = [0, 0];
     for (let L = 2; L <= MAX_LEVEL; L++) INVEST_XP[L] = Math.max(INVEST_XP[L - 1] + 1, Math.round(0.147 * Math.pow(L, 2.76)));
+
+    // LOGI_XP[L] = total Logistics XP to reach level L (smooth curve through these points)
+    //   level 5 ≈ 1 h, level 25 ≈ 8 h, level 50 ≈ 14 h, level 99 ≈ 50 h with a normally growing fleet
+    const LOGI_XP = [0, 0];
+    {
+      const anchors = [[2, 8], [5, 100], [25, 3500], [50, 12000], [99, 145000]];
+      for (let L = 2; L <= MAX_LEVEL; L++) {
+        let i = 0;
+        while (i < anchors.length - 2 && L > anchors[i + 1][0]) i++;
+        const [a, xa] = anchors[i], [b, xb] = anchors[i + 1];
+        const v = Math.round(Math.exp(Math.log(xa) + (Math.log(xb) - Math.log(xa)) * (Math.log(L) - Math.log(a)) / (Math.log(b) - Math.log(a))));
+        LOGI_XP[L] = Math.max(LOGI_XP[L - 1] + 1, v);
+      }
+    }
 
     // Moves XP from one curve to another, keeping the same level and progress
     function convertXp(xp, from, to) {
@@ -5765,7 +5789,40 @@
     const AGENT_DELAY = 5, AGENT_FEE = 0.02;
     if (logi.truckAgent === undefined) logi.truckAgent = false;
     if (logi.tankerAgent === undefined) logi.tankerAgent = false;
-    const agentOn = (key) => !!logi[key + "Agent"];
+    /* ----- 🚚 LOGISTICS LEVEL: XP when a contract is delivered = contract minutes × fleet rate.
+       Trucks 1 XP/min, tankers 3 XP/min, cargo planes 6 XP/min.
+       Unlocks the Logistics agents: trucks at level 5, tankers at 25, planes at 50. ----- */
+    const LOGI_XP_RATE = { truck: 1, tanker: 3, plane: 6 };
+    const AGENT_LEVEL = { truck: 5, tanker: 25, plane: 50 };
+    // older saves: about 10 XP for every contract already delivered
+    if (typeof state.logiXp !== "number") state.logiXp = (logi.contracts || 0) * 10;
+    const logiLevel = () => levelInfo(state.logiXp, LOGI_XP).level;
+    const agentUnlocked = (key) => logiLevel() >= AGENT_LEVEL[key];
+    function addLogiXp(key, seconds) {
+      const before = logiLevel();
+      state.logiXp += Math.max(1, Math.round(seconds / 60 * LOGI_XP_RATE[key]));
+      const after = logiLevel();
+      updateLogiLevel();
+      if (after > before) {
+        const box = $("logiLevel");
+        box.classList.remove("levelUp"); void box.offsetWidth; box.classList.add("levelUp");
+        const unlocked = Object.keys(AGENT_LEVEL).filter(k => AGENT_LEVEL[k] > before && AGENT_LEVEL[k] <= after);
+        showAlert(`🚚 Logistics level ${after}!`,
+          unlocked.length ? `Unlocked: 🤖 Logistics agent for ${unlocked.map(k => FLEETS[k].label.toLowerCase() + "s").join(", ")}.` : "Keep delivering to unlock more.", "good");
+        updateAgentButton();
+      }
+    }
+    function updateLogiLevel() {
+      const info = levelInfo(state.logiXp, LOGI_XP);
+      $("logiLevelNum").textContent = info.level;
+      $("logiLevelText").textContent = info.level + (info.max ? " (MAX)" : "");
+      $("logiXpFill").style.width = info.max ? "100%" : (100 * info.into / info.need) + "%";
+      $("logiXpText").textContent = info.max ? "Max level reached!"
+        : fmtNum(info.into) + " / " + fmtNum(info.need) + " XP to level " + (info.level + 1);
+      const next = Object.keys(AGENT_LEVEL).find(k => info.level < AGENT_LEVEL[k]);
+      $("logiPerkText").textContent = next ? `🤖 ${FLEETS[next].label} agent unlocks at level ${AGENT_LEVEL[next]}` : "🤖 All agents unlocked";
+    }
+    const agentOn = (key) => !!logi[key + "Agent"] && agentUnlocked(key);
     function agentTick(key) {
       if (!agentOn(key)) return false;
       let picked = false;
@@ -5797,12 +5854,15 @@
     function updateAgentButton() {
       for (const key of ["truck", "tanker", "plane"]) {
         const b = $(key + "Agent");
-        b.textContent = "🤖 Logistics agent: " + (agentOn(key) ? "ON" : "OFF");
+        const open = agentUnlocked(key);
+        b.disabled = !open;
+        b.textContent = open ? "🤖 Logistics agent: " + (agentOn(key) ? "ON" : "OFF") : `🔒 Agent: Logistics level ${AGENT_LEVEL[key]}`;
         b.classList.toggle("on", agentOn(key));
       }
     }
     for (const key of ["truck", "tanker", "plane"]) {
       $(key + "Agent").addEventListener("click", () => {
+        if (!agentUnlocked(key)) return;
         logi[key + "Agent"] = !agentOn(key);
         fleetList(key).forEach(v => { v.wait = 0; });   // everyone waiting gets a fresh 5 seconds
         updateAgentButton(); renderFleet(key); save();
@@ -5842,6 +5902,7 @@
             paid += pay;
             logi.earned += pay;
             logi.contracts = (logi.contracts || 0) + 1;
+            addLogiXp(key, v.contract.seconds);
             const r = F.routes[v.contract.route];
             showNotice(`${F.icon} ${v.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(pay)}!`);
             v.contract = null;
@@ -6224,7 +6285,7 @@
       L.history.push({ choice: id, at: Date.now() });
       const keep = {
         achievements: state.achievements, stats: state.stats, casinoXp: state.casinoXp, casinoStats: state.casinoStats,
-        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId, xpVersion: state.xpVersion,
+        cosmetics: state.cosmetics, legacy: L, vip: state.vip, nextId: state.nextId, xpVersion: state.xpVersion, logiXp: state.logiXp,
         vpPayHidden: state.vpPayHidden, uthPayHidden: state.uthPayHidden, view: "income",
         invest: { xp: inv.xp, properties: [], etf: 0, etfTimer: ETF_EVERY, etfHistory: [] },
         // all-time logistics counters are statistics: always kept
@@ -6329,32 +6390,33 @@
 
     /* ----- 📋 Table of every level (Gambler and Investor use the same XP curve) ----- */
     function showLevelTable(kind) {
-      const gam = kind === "gambler";
-      const xp = gam ? state.casinoXp : inv.xp;
-      const curve = gam ? LEVEL_XP : INVEST_XP;
+      const gam = kind === "gambler", lg = kind === "logistics";
+      const xp = gam ? state.casinoXp : lg ? state.logiXp : inv.xp;
+      const curve = gam ? LEVEL_XP : lg ? LOGI_XP : INVEST_XP;
       const cur = levelInfo(xp, curve).level;
       const unlock = (L) => {
         const u = [];
+        if (lg) for (const k in AGENT_LEVEL) if (AGENT_LEVEL[k] === L) u.push(`🤖 ${FLEETS[k].label} agent`);
         if (gam && L >= 5 && (L - 5) % 10 === 0) u.push(`🎰 Casino #${(L - 5) / 10 + 1}`);
-        if (!gam && L >= 5 && (L - 5) % 10 === 0) u.push(`🏨 Hotel #${(L - 5) / 10 + 1}`);
-        if (!gam && L === 10) u.push("🏦 Brokerage Firm");
+        if (kind === "investor" && L >= 5 && (L - 5) % 10 === 0) u.push(`🏨 Hotel #${(L - 5) / 10 + 1}`);
+        if (kind === "investor" && L === 10) u.push("🏦 Brokerage Firm");
         return u.join(", ");
       };
-      const perk = (L) => gam ? `${(CASHBACK_PER_LEVEL * L * 100).toFixed(1)}% cashback`
+      const perk = (L) => lg ? "" : gam ? `${(CASHBACK_PER_LEVEL * L * 100).toFixed(1)}% cashback`
                               : `${(Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (L - 1)) * 100).toFixed(1)}% ETF fee · +${(RE_LEVEL_BONUS * L * 100).toFixed(1)}% property sales`;
       let rows = "";
       for (let L = 1; L <= MAX_LEVEL; L++) {
         const step = L === 1 ? 0 : curve[L] - curve[L - 1];
         rows += `<tr class="${L === cur ? "now" : L < cur ? "done" : ""}" ${L === cur ? 'id="levelNow"' : ""}>
-          <td>${L}</td><td>${fmtNum(curve[L])}</td><td>${L === 1 ? "—" : "+" + fmtNum(step)}</td><td>${perk(L)}</td><td>${unlock(L)}</td></tr>`;
+          <td>${L}</td><td>${fmtNum(curve[L])}</td><td>${L === 1 ? "—" : "+" + fmtNum(step)}</td>${lg ? "" : `<td>${perk(L)}</td>`}<td>${unlock(L)}</td></tr>`;
       }
       const next = cur < MAX_LEVEL ? `${fmtNum(curve[cur + 1] - xp)} XP to level ${cur + 1}` : "Max level reached!";
-      showModal(`<h2>${gam ? "🎲 Gambler" : "📈 Investor"} levels</h2>
-        <p class="muted">${gam ? "XP = bcoin bet × game multiplier: Plinko, Sky Climb, Video Poker ×1 · Roulette ×2 · Blackjack ×4 · Ultimate Texas Hold'em ×5 · Super high roller tables ×2 more"
+      showModal(`<h2>${gam ? "🎲 Gambler" : lg ? "🚚 Logistics" : "📈 Investor"} levels</h2>
+        <p class="muted">${lg ? "XP when a contract is delivered: contract minutes × 1 (trucks), × 3 (tankers), × 6 (cargo planes)" : gam ? "XP = bcoin bet × game multiplier: Plinko, Sky Climb, Video Poker ×1 · Roulette ×2 · Blackjack ×4 · Ultimate Texas Hold'em ×5 · Super high roller tables ×2 more"
                                : "Every minute with money invested gives 4 XP, 8 XP from 1 scoin invested, 16 XP from 100 scoin"} ·
           You: level ${cur}, ${fmtNum(xp)} XP · ${next}</p>
         <div class="levelTableWrap"><table class="levelTable">
-          <thead><tr><th>Level</th><th>Total XP</th><th>This level</th><th>${gam ? "Cashback" : "Perks"}</th><th>Unlocks</th></tr></thead>
+          <thead><tr><th>Level</th><th>Total XP</th><th>This level</th>${lg ? "" : `<th>${gam ? "Cashback" : "Perks"}</th>`}<th>Unlocks</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
         <button class="btn" onclick="hideModal()">Close</button>`);
       $("modalBox").classList.add("wide");
@@ -6379,7 +6441,7 @@
     renderProperties();
     updateInvestLive();
     renderCosmetics(); applyCosmetics();
-    renderTankers(); updateAgentButton();
+    renderTankers(); updateAgentButton(); updateLogiLevel();
     showView(["casino", "invest", "shop", "logistics", "achievements"].includes(state.view) ? state.view : "income");
     if (state.gameOver) showGameOver(state.taxDebts[0] || { amount: 0 });
     else if (state.pendingTaxId !== null) {

@@ -294,6 +294,14 @@
     .ach .nm { font-weight: 800; }
     .ach .bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.1); margin-top: 6px; overflow: hidden; }
     .ach .bar div { height: 100%; background: linear-gradient(90deg, #6ec6ff, #b388ff); }
+    #modalBox.wide { max-width: 760px; width: 92vw; border-color: #6ec6ff; box-shadow: 0 0 40px rgba(110, 198, 255, 0.35); }
+    .levelTableWrap { max-height: 55vh; overflow-y: auto; margin: 12px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
+    .levelTable { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+    .levelTable th { position: sticky; top: 0; background: #23253a; padding: 6px 10px; }
+    .levelTable td { padding: 4px 10px; border-top: 1px solid rgba(255,255,255,0.06); font-variant-numeric: tabular-nums; }
+    .levelTable td:nth-child(2), .levelTable td:nth-child(3) { text-align: right; }
+    .levelTable tr.done td { color: #8a8fa8; }
+    .levelTable tr.now td { background: rgba(255, 211, 77, 0.18); color: #ffd34d; font-weight: 800; }
     .alertPop.good { background: #7a5a00; border-color: #ffd34d; }
     /* Red alert pop-ups (top right, don't pause the game) */
     #alerts { position: fixed; top: 70px; right: 16px; z-index: 60; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
@@ -948,7 +956,8 @@
     <div class="card row" id="casinoLevel" style="gap:16px; justify-content:flex-start">
       <div class="levelNum" id="levelNum">1</div>
       <div style="flex:1">
-        <div class="row"><b>🎲 Gambler level <span id="levelText">1</span></b>
+        <div class="row"><b>🎲 Gambler level <span id="levelText">1</span>
+            <button class="btn ghost small" data-levels="gambler" style="margin-left:6px">📋 All levels</button></b>
           <span class="muted" id="cashbackText">Cashback 0.1% on lost bets</span></div>
         <div class="xpBar"><div class="xpFill" id="xpFill"></div></div>
         <div class="muted" id="xpText">0 / 80,000 XP</div>
@@ -1052,7 +1061,8 @@
     <div class="card row levelCard" id="investLevel">
       <div class="levelNum" id="investLevelNum">1</div>
       <div style="flex:1">
-        <div class="row"><b>📈 Investor level <span id="investLevelText">1</span></b>
+        <div class="row"><b>📈 Investor level <span id="investLevelText">1</span>
+            <button class="btn ghost small" data-levels="investor" style="margin-left:6px">📋 All levels</button></b>
           <span class="muted" id="investFeeText"></span></div>
         <div class="xpBar"><div class="xpFill" id="investXpFill"></div></div>
         <div class="muted" id="investXpText"></div>
@@ -2119,11 +2129,11 @@
 
     /* ----- Pop-up window ----- */
     function showModal(html) {
-      $("modalBox").classList.remove("gold");
+      $("modalBox").classList.remove("gold", "wide");
       $("modalBox").innerHTML = html;
       $("modal").hidden = false;
     }
-    function hideModal() { $("modal").hidden = true; $("modalBox").classList.remove("gold"); }
+    function hideModal() { $("modal").hidden = true; $("modalBox").classList.remove("gold", "wide"); }
 
     function showPaymentPopup(d) {
       showModal(`<h2>🧾 Tax payment due</h2>
@@ -6278,6 +6288,43 @@
         showPrestigeOffer();
       }
     }, 1000);
+
+    /* ----- 📋 Table of every level (Gambler and Investor use the same XP curve) ----- */
+    function showLevelTable(kind) {
+      const gam = kind === "gambler";
+      const xp = gam ? state.casinoXp : inv.xp;
+      const cur = levelInfo(xp).level;
+      const unlock = (L) => {
+        const u = [];
+        if (gam && L >= 5 && (L - 5) % 10 === 0) u.push(`🎰 Casino #${(L - 5) / 10 + 1}`);
+        if (!gam && L >= 5 && (L - 5) % 10 === 0) u.push(`🏨 Hotel #${(L - 5) / 10 + 1}`);
+        if (!gam && L === 10) u.push("🏦 Brokerage Firm");
+        return u.join(", ");
+      };
+      const perk = (L) => gam ? `${(CASHBACK_PER_LEVEL * L * 100).toFixed(1)}% cashback`
+                              : `${(Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (L - 1)) * 100).toFixed(1)}% ETF fee`;
+      let rows = "";
+      for (let L = 1; L <= MAX_LEVEL; L++) {
+        const step = L === 1 ? 0 : LEVEL_XP[L] - LEVEL_XP[L - 1];
+        rows += `<tr class="${L === cur ? "now" : L < cur ? "done" : ""}" ${L === cur ? 'id="levelNow"' : ""}>
+          <td>${L}</td><td>${fmtNum(LEVEL_XP[L])}</td><td>${L === 1 ? "—" : "+" + fmtNum(step)}</td><td>${perk(L)}</td><td>${unlock(L)}</td></tr>`;
+      }
+      const next = cur < MAX_LEVEL ? `${fmtNum(LEVEL_XP[cur + 1] - xp)} XP to level ${cur + 1}` : "Max level reached!";
+      showModal(`<h2>${gam ? "🎲 Gambler" : "📈 Investor"} levels</h2>
+        <p class="muted">${gam ? "1 XP for every bcoin you bet in the casino" : "1 XP for every bcoin you invest"} ·
+          You: level ${cur}, ${fmtNum(xp)} XP · ${next}</p>
+        <div class="levelTableWrap"><table class="levelTable">
+          <thead><tr><th>Level</th><th>Total XP</th><th>This level</th><th>${gam ? "Cashback" : "ETF fee"}</th><th>Unlocks</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+        <button class="btn" onclick="hideModal()">Close</button>`);
+      $("modalBox").classList.add("wide");
+      const now = $("levelNow");
+      if (now) now.scrollIntoView({ block: "center" });
+    }
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-levels]");
+      if (b && !isPaused()) showLevelTable(b.dataset.levels);
+    });
 
     // Make the game state reachable from the browser console (F12) for testing
     window.state = state;

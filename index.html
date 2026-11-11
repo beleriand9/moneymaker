@@ -337,6 +337,18 @@
     #livePane .chartHead { font-size: 14px; }
     #livePane .chartTip { font-size: 13px; }
     .maLegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; font-weight: 700; padding: 0 4px 4px; }
+    #worldMap { position: relative; margin-top: 8px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+    #worldMap svg { display: block; width: 100%; height: auto; }
+    #worldMapWrap[hidden] { display: none; }
+    .mapLand polygon { fill: #2f4a3a; stroke: #4f7a5f; stroke-width: 0.8; stroke-linejoin: round; }
+    .mapGrid line { stroke: #ffffff; stroke-opacity: 0.05; stroke-width: 1; }
+    #mapRoutes polyline { fill: none; stroke-width: 1.3; stroke-dasharray: 4 4; opacity: 0.55; }
+    .mapIcon { cursor: pointer; }
+    .mapIcon:hover circle { stroke-width: 3; }
+    .mapIcon.idle { opacity: 0.85; }
+    .mapTip { position: absolute; width: 210px; padding: 8px 10px; border-radius: 10px; background: #111327; border: 1px solid #6ec6ff;
+              font-size: 12px; line-height: 1.45; pointer-events: none; z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+    #mapCard .seg.on { background: #29b6f6; color: #06243a; }
     .tradePanel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
     .tradePanel input { max-width: 180px; }
     .seg.long.on { background: #26a69a; color: #fff; }
@@ -1083,6 +1095,16 @@
       <div class="stat"><div class="label">✈️ Planes</div><div class="value chips" id="planeCount">0 / 5</div></div>
       <div class="stat"><div class="label">📦 Delivered (all time)</div><div class="value chips" id="logiEarned">0</div></div>
       <div class="stat"><div class="label">📋 Contracts fulfilled</div><div class="value chips" id="logiContracts">0</div></div>
+    </div>
+    <div class="card" id="mapCard">
+      <div class="row"><h2 style="margin:0">🗺️ World map</h2>
+        <span><span class="segGroup"><button class="seg" data-mapshow="truck">🚛 Trucks</button><button class="seg" data-mapshow="tanker">🚢 Tankers</button><button class="seg" data-mapshow="plane">✈️ Planes</button></span>
+        <button class="btn ghost small" id="mapToggle" style="margin-left:6px">▾ Minimize</button></span></div>
+      <div id="worldMapWrap">
+        <div class="muted" id="mapCounts" style="margin-top:6px"></div>
+        <div id="worldMap"></div>
+        <div class="muted" style="font-size:12px; margin-top:4px">Hover (or tap) a vehicle to see where it's going. Gray ring = waiting for a contract, red = broken down.</div>
+      </div>
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">🚛 Semi-trucks</h2>
@@ -6084,6 +6106,7 @@
             addLogiXp(key, v.contract.seconds);
             const r = F.routes[v.contract.route];
             showNotice(`${F.icon} ${v.name} arrived in ${r.to.replace(/ \S+$/, "")}: +${fmt(pay)}!`);
+            v.city = cityName(r.to);   // parked here on the world map
             v.contract = null;
             v.wait = 0;
             arrived = true;
@@ -6671,6 +6694,218 @@
     renderCrypto();
     seedCryptoHistory();
     connectCrypto("binance");
+
+    /* =====================================================================
+       🗺️ WORLD MAP: shows every truck, tanker and plane. Moving ones travel along their route
+       (trucks: straight roads, tankers: sea lanes, planes: curved flight paths). Hover an icon for details.
+       Equirectangular map, longitude −180…180, latitude 80…−60.
+       ===================================================================== */
+    const MAP_W = 1000, MAP_H = 389, MAP_TOP = 80, MAP_SPAN = 140;
+    const mx = (lon) => (lon + 180) / 360 * MAP_W;
+    const my = (lat) => (MAP_TOP - lat) / MAP_SPAN * MAP_H;
+    // City coordinates [latitude, longitude]
+    const CITY = {
+      "Chicago": [41.88, -87.63], "New York": [40.71, -74.0], "Sydney": [-33.87, 151.2], "Melbourne": [-37.81, 144.96],
+      "Madrid": [40.42, -3.7], "Milan": [45.46, 9.19], "Bangkok": [13.75, 100.5], "Kuala Lumpur": [3.14, 101.69],
+      "Los Angeles": [34.05, -118.24], "Denver": [39.74, -104.99], "Beijing": [39.9, 116.4], "Shanghai": [31.23, 121.47],
+      "Toronto": [43.65, -79.38], "Montreal": [45.5, -73.57], "Johannesburg": [-26.2, 28.05], "Cape Town": [-33.92, 18.42],
+      "São Paulo": [-23.55, -46.63], "Buenos Aires": [-34.6, -58.38], "Delhi": [28.61, 77.21], "Mumbai": [19.08, 72.88],
+      "Sullom Voe": [60.46, -1.28], "Rotterdam": [51.92, 4.48], "Ceyhan": [36.68, 35.82], "Augusta / Trieste": [37.23, 15.22],
+      "Arzew": [35.85, -0.32], "Fos-sur-Mer": [43.44, 4.94], "Cayo Arcas": [20.2, -91.98], "Houston": [29.76, -95.37],
+      "Kikeh": [6.3, 116.2], "Singapore": [1.29, 103.85], "Kozmino": [42.73, 133.03], "Ulsan": [35.54, 129.31],
+      "Primorsk": [60.36, 28.61], "Wilhelmshaven": [53.52, 8.13], "Mina Al Fahal": [23.63, 58.52], "Melaka": [2.19, 102.25],
+      "Hong Kong": [22.3, 114.17], "Anchorage": [61.22, -149.9], "Leipzig": [51.34, 12.37], "Dubai": [25.2, 55.27],
+      "Memphis": [35.15, -90.05], "Louisville": [38.25, -85.76], "Liège": [50.63, 5.57], "Istanbul": [41.0, 28.98],
+      "Incheon": [37.46, 126.44], "Doha": [25.29, 51.53], "Frankfurt": [50.11, 8.68], "Tokyo": [35.68, 139.69],
+      "Miami": [25.76, -80.19], "Bogotá": [4.71, -74.07], "Amsterdam": [52.37, 4.9],
+    };
+    // Sea lanes for tankers (in-between points [lat, lon]) so ships don't sail over land
+    const SEA_LANES = {
+      "Sullom Voe>Rotterdam": [[59, 1], [55, 3.5], [52.3, 3.8]],
+      "Ceyhan>Augusta / Trieste": [[35.8, 34.5], [34, 27], [36.3, 16.5]],
+      "Houston>Rotterdam": [[27, -89], [24.2, -83], [25.5, -79.5], [33, -70], [44, -40], [49.3, -6], [50.2, -1], [51.4, 2.5]],
+      "Primorsk>Wilhelmshaven": [[59.7, 25], [58.8, 20], [56, 15.5], [55.5, 12.9], [56.8, 12], [57.9, 10.9], [57.5, 8], [54.2, 7.6]],
+      "Mina Al Fahal>Melaka": [[21, 61], [8, 76], [5.2, 80.5], [6, 93], [5.5, 97]],
+      "Kikeh>Singapore": [[5, 110]],
+    };
+    const MAP_HOME = { truck: "Chicago", tanker: "Rotterdam", plane: "Memphis" };
+    const MAP_COLOR = { truck: "#ff9800", tanker: "#29b6f6", plane: "#eceff1" };
+    const cityName = (s) => s.replace(/ \S+$/, "");
+
+    // Simple continent outlines [lon, lat]
+    const LAND = [
+      [[-168,66],[-162,70],[-156,71.3],[-141,69.6],[-128,70],[-115,68.5],[-100,68],[-95,72],[-85,70],[-80,63],[-90,57],[-94,59],[-85,55],[-79,51.5],[-77,59],[-70,59],[-64,60],[-61,56],[-56,52],[-60,47],[-66,44.5],[-70,41.5],[-74,40.5],[-76,37],[-76,35],[-81,31.5],[-80,27],[-80.5,25.2],[-82,26.5],[-83,29.5],[-89,30],[-94,29.5],[-97,27.5],[-97.5,22],[-95,18.5],[-91,18.8],[-90.5,21],[-87,21.5],[-88,16],[-83.5,15],[-83.5,11],[-79.5,9],[-77.3,8.2],[-78,7],[-80,7.5],[-83,8.3],[-85.7,10],[-87.5,13],[-91.5,14],[-94.5,16],[-97,15.8],[-105.5,20],[-105.7,22.5],[-109.5,26.5],[-112.5,29.5],[-114.7,31.5],[-112,27],[-109.9,23],[-114,27.5],[-117,32.5],[-120.6,34.5],[-122.5,37.5],[-124,40],[-124.5,43],[-124,46.5],[-123,49],[-127.5,50.5],[-130.5,54.5],[-135,57.5],[-140,59.8],[-147,60.8],[-152,59],[-158,57.5],[-164,55],[-158,58.5],[-162,60],[-165,62.5],[-164.5,64.5]],
+      [[-73,78],[-60,82],[-30,83.5],[-20,80],[-18,76],[-22,70],[-30,68],[-40,65],[-43,60],[-48,61],[-52,65],[-54,69],[-58,75],[-66,76]],
+      [[-120,74],[-95,74],[-85,73],[-80,76],[-90,80],[-110,78]],
+      [[-80,73],[-68,70],[-62,66],[-65,63],[-72,63],[-80,67]],
+      [[-77.3,8.2],[-72,11.8],[-63,10.7],[-60,8.5],[-55,6],[-51,4],[-50,0],[-44,-2.5],[-35,-5.5],[-35,-9],[-39,-13.5],[-39,-18],[-41,-22],[-45,-23.7],[-48.5,-26.5],[-48.7,-28.5],[-53,-33.5],[-58.4,-34.6],[-57,-37],[-62,-39],[-65,-42],[-65.5,-45],[-67.5,-47],[-68.5,-51],[-69,-52.5],[-71,-54],[-74.5,-52],[-75.5,-47],[-73.5,-42],[-73.5,-37],[-71.6,-33],[-71.4,-28],[-70.3,-18.5],[-75,-15.5],[-77.6,-10],[-81.2,-6],[-80.5,-2],[-80,1],[-78.8,1.5],[-77.5,4]],
+      [[-9.5,43],[-8.9,38.7],[-8.9,37],[-6,36.2],[-2,36.7],[0,38.5],[0.5,40.5],[3.2,42],[3.2,43.3],[6,43.1],[8.5,44.3],[10.5,43.8],[12.3,41.8],[15.6,40.1],[16,38],[15.6,38],[17.2,39],[18.5,40.2],[16,41.5],[13.5,43.6],[12.3,45.3],[13.7,45.6],[15,44.5],[19,42],[19.4,40.3],[21,38],[22.5,36.5],[23.2,38],[24,40.5],[26,40.7],[29,41.2],[28,42],[27.7,43.2],[28.6,44],[30,45.5],[31.5,46.6],[33.5,44.5],[35.5,45.2],[37.5,47],[39,47.2],[38,45],[41,43.2],[42,47],[48,46],[55,50],[60,55],[60,69],[45,68],[41,66.5],[34,69.3],[29,70],[25,71],[20,70],[15,68.5],[12,65],[8,63],[5,62],[5,59],[7,58],[10.5,59],[11,58.5],[12.5,56],[16,56],[16.5,57.5],[19,59.5],[18,62.5],[21,64.5],[25,65.6],[22.5,63],[21,60.8],[23,60],[29,60.5],[28,59.5],[24,59.4],[21.5,57.3],[21,55.5],[18,54.8],[14,54],[11,54],[10,55],[8.5,57],[8.2,55.5],[8.6,53.9],[6,53.4],[4.5,52],[3.5,51.3],[1.6,50.9],[-1.5,49.7],[-1.8,48.6],[-4.7,48.4],[-2,47],[-1.2,46],[-1.5,44]],
+      [[-5.7,50],[1.4,51.2],[1.7,52.7],[0.2,53.5],[-1.6,55.6],[-2,57.6],[-4,58.6],[-5,58.5],[-6.2,56.8],[-5,55],[-3,54.5],[-3.3,53.4],[-4.8,52.8],[-5.3,51.7],[-3.2,51.4]],
+      [[-10,51.6],[-6,52.2],[-6,54],[-7.5,55.3],[-10,54.2]],
+      [[-24,65.5],[-22,66.4],[-16,66.5],[-13.5,65],[-18,63.4],[-22,63.8]],
+      [[26,40],[26.5,38.5],[27.3,37],[28.3,36.7],[30.5,36.3],[32.5,36.1],[36,36.5],[36.2,37.5],[40,37],[44.5,37.2],[44.5,39.5],[42,41.5],[41.5,41.5],[36,41.7],[33,42],[29,41.2]],
+      [[-17,21],[-16.5,24],[-13,27.8],[-9.8,29.8],[-9.5,32],[-6.8,34],[-5.9,35.8],[-2,35.1],[3,36.8],[9.8,37.3],[11,37],[10.2,34],[11,33.2],[15.2,32.3],[19,30.3],[20,31],[20.2,32.8],[23,32.6],[25,31.7],[29,30.9],[32.3,31.3],[34.3,31.3],[34.6,28],[32.6,30],[33.6,27.3],[35.5,23.5],[37.3,21],[38.4,18],[39.7,15.5],[41.7,13.4],[43.3,12.5],[44,10.5],[51.2,11.8],[51,10.4],[49.5,6.5],[46,2],[42,-1],[40,-3.5],[39.2,-7],[39.5,-10.5],[40.6,-15],[37,-17.6],[35.3,-22],[35.5,-24],[33,-25.9],[32.9,-28],[31,-29.9],[28,-32.8],[25.6,-34],[22,-34.1],[20,-34.8],[18.4,-34.2],[18.2,-32],[17.2,-29],[15.2,-27],[14.4,-23],[13,-20.5],[11.8,-17],[12.2,-14],[13.8,-11],[13,-8.5],[12.2,-6],[9.5,-2],[9.6,1],[9.4,3.8],[8.5,4.5],[6,4.3],[4.5,6.3],[1.5,6.1],[-2,4.8],[-4.5,5.2],[-7.5,4.4],[-9.5,5.6],[-12,7.2],[-13.3,9],[-15,10.9],[-16.8,12.5],[-17.2,14.7],[-16.5,16.5],[-16.2,19.5]],
+      [[44,-25],[47,-25.2],[49.5,-17],[50.5,-15.5],[49.3,-12],[44,-16.5],[43.3,-22]],
+      [[34.9,29.5],[36.5,32],[39,32.2],[42,31],[47.5,30],[48.5,28],[50.2,26.3],[51.6,24],[54,24.2],[56,26.3],[56.4,24.8],[58.7,23.6],[59.8,22.4],[57.8,19],[55,17],[52.2,15.6],[49,14],[45,12.8],[43.3,12.7],[42.7,16.5],[40.5,20.5],[39,22],[37,25.5],[35.5,28]],
+      [[40,42],[44,37],[48,30],[50.2,30],[51,27.8],[56.5,27],[58,25.7],[61.5,25.2],[66.5,25.4],[68.5,23.5],[70,21],[72.8,20],[73.2,16],[74.7,12.8],[76.5,8.8],[77.5,8],[78.2,9],[79.9,10.3],[80.3,13.5],[80.1,15.8],[82.3,16.6],[85,19.5],[87,21.5],[89,21.8],[91.8,22.5],[92.3,20.7],[94.4,16],[94.3,18.2],[97.5,16.6],[98,14],[98.7,10],[98.3,8],[100.3,6.5],[101.3,2.9],[103.5,1.3],[104.2,1.4],[103.4,4.5],[102.3,6.2],[100.4,7.9],[99.2,9.3],[99.2,10.5],[100.1,13.3],[100.9,12.6],[102.5,12.2],[104.8,10.4],[106.7,10.3],[109.2,11.6],[109.3,13.4],[108.6,15.5],[106.6,17.5],[105.6,18.9],[106.7,20.6],[108.3,21.6],[110.2,20.9],[110.4,21.9],[113.5,22.2],[116.5,22.9],[119.5,25.5],[121.5,28],[121.9,31],[120.9,32.8],[119.2,34.5],[120.7,36.4],[122.5,37.3],[118.9,37.4],[118,38.5],[117.7,39.1],[119.5,39.9],[121.5,40.9],[122.2,40.5],[121.2,39],[123.5,39.8],[125.3,39.5],[126.6,37.5],[126.3,34.6],[129.3,35.2],[129.4,37],[128.4,38.6],[127.5,39.8],[129.7,41],[130.7,42.3],[133,42.8],[135.5,43.9],[138,46.5],[140.4,48.4],[140.5,51.5],[141.4,53.2],[137.5,54],[135,54.7],[138,56.5],[143,59.3],[148.5,59.3],[152,59],[155,59.3],[156.7,61.5],[160,61.7],[163.5,62.5],[164.5,62.5],[160,60.2],[156.7,57.5],[156,51],[158.5,53],[160.6,54.6],[162.1,56.1],[163.2,58],[170.3,60],[173,61.5],[177.5,62.5],[180,62.3],[180,69],[175,69.8],[170,70],[160,70],[150.5,71.5],[140,72.5],[130,71],[129,72.5],[113,73.6],[110,76.5],[104,77.7],[100,76],[90,75.5],[80,73.5],[74,72.8],[68.5,73],[66.5,71],[69,68.5],[60,69],[60,55],[55,50],[48,46],[42,47]],
+      [[95.3,5.6],[97.5,5.2],[100.4,2.2],[104.5,-1.5],[106,-3.3],[104.5,-5.9],[102.3,-4],[100.3,-1],[98.6,1.8]],
+      [[105.2,-6.8],[108,-6.3],[111,-6.4],[114.6,-7.7],[114.4,-8.7],[110,-8.1],[106.4,-7.4]],
+      [[109,1.5],[110,1.7],[111.5,2.5],[113,3.2],[115.4,4.9],[116.7,6.9],[119.2,5.4],[118,4.3],[117.9,1.3],[118.9,0.9],[117.5,-0.5],[116.5,-2],[116,-3.8],[114.7,-4],[113,-3.2],[111.7,-3],[110.2,-2.9],[110,-1.5],[109,0.4]],
+      [[119.4,-5.5],[120.4,-5.5],[120.9,-2.6],[121.1,-1],[123,-0.9],[124.6,0.8],[125.2,1.5],[123.5,0.3],[120.2,0.4],[119.6,-0.5]],
+      [[131,-1.4],[134.1,-0.9],[137.8,-1.5],[141,-2.6],[144.6,-3.9],[147.5,-6.1],[150.9,-10.6],[147.2,-10.1],[146,-8.1],[143.3,-9],[142.6,-9.4],[140.9,-9.1],[138.4,-8.4],[137.9,-5.4],[134.3,-4],[132.4,-4]],
+      [[120.6,18.5],[122.2,18.5],[122.3,17],[121.5,15.9],[124,13.8],[123.9,12.7],[121.2,13.6],[120.6,14.4],[119.8,16.3]],
+      [[122,7],[124.3,6.2],[126.1,6.3],[126.5,7.9],[125.4,9.8],[123.4,8.6]],
+      [[129.8,33.3],[131.5,31.4],[131.7,33.8],[133.9,34.4],[135.2,33.8],[136.9,34.4],[139,34.9],[140.8,35.7],[141,38.3],[142,39.6],[141.4,41.4],[140.3,41.2],[139.9,40],[139.6,38.3],[138.5,37.4],[136.8,37.3],[136,35.8],[133.1,35.6],[131,34.4]],
+      [[140,42.5],[141.4,41.5],[143.3,42],[145.5,43.3],[144.6,44.2],[141.9,45.5],[141.4,43.4]],
+      [[120.2,22.7],[120.9,22],[121.9,24.9],[121.5,25.3],[120.1,23.7]],
+      [[79.8,8.2],[80.2,9.8],[81.8,7.5],[81.2,6.2],[80,6]],
+      [[113.4,-22],[114.2,-26.3],[115,-29.5],[115,-33.6],[117.9,-35.1],[123.5,-33.9],[126,-32.3],[131.2,-31.5],[134.2,-32.7],[135.9,-34.8],[137.8,-32.8],[138.1,-35.6],[139.6,-36.8],[140.6,-38],[143.6,-38.8],[146.3,-39.1],[148,-37.8],[150,-37.5],[150.8,-34.2],[152.5,-32.3],[153.5,-28.5],[153,-25.2],[150.8,-22.6],[149.3,-21.2],[146.3,-18.9],[145.4,-16.4],[145.3,-14.9],[143.5,-12.8],[142.5,-10.7],[141.5,-13.5],[141.5,-17],[140,-17.7],[136.8,-15.9],[135.9,-15],[136.9,-12.2],[136,-11.9],[132.6,-11.5],[131,-12.2],[129.4,-14.9],[126.1,-14.1],[124.4,-16.3],[122.2,-18],[121,-19.6],[117.4,-20.7]],
+      [[144.6,-40.7],[148.3,-40.9],[148,-43.2],[146,-43.6]],
+      [[172.7,-34.4],[174.4,-35.6],[176,-37.6],[178.5,-37.7],[177,-39.3],[176,-41.3],[174.6,-41.3],[175.2,-39.6],[174,-39],[174.5,-37.1]],
+      [[172.7,-40.5],[174.3,-41.7],[173.3,-43.7],[171.2,-44.4],[170.6,-45.9],[168.4,-46.6],[166.5,-45.8],[168.3,-44],[170.8,-42.5]],
+      [[-84.9,21.9],[-82,22.8],[-77.5,21.8],[-74.2,20.2],[-77.7,19.9],[-79.3,21.5],[-82,21.5]],
+      [[-74.4,18.5],[-72.8,19.9],[-69,19.8],[-68.4,18.5],[-71.4,17.6]],
+    ];
+
+    // The path of a route as map points [x, y] (x can go past the map edge for Pacific flights)
+    const routePathCache = {};
+    function routePath(key, route) {
+      const id = key + ":" + route.from + ">" + route.to;
+      if (routePathCache[id]) return routePathCache[id];
+      const a = CITY[cityName(route.from)], b = CITY[cityName(route.to)];
+      if (!a || !b) return null;
+      let pts;
+      if (key === "plane") {
+        // curved flight path, the short way around the world
+        let lon1 = a[1], lon2 = b[1];
+        if (lon2 - lon1 > 180) lon2 -= 360; else if (lon1 - lon2 > 180) lon2 += 360;
+        const dist = Math.hypot(lon2 - lon1, b[0] - a[0]);
+        const cLat = (a[0] + b[0]) / 2 + dist * 0.18 * (((a[0] + b[0]) / 2) >= 0 ? 1 : -1);
+        const cLon = (lon1 + lon2) / 2;
+        pts = [];
+        for (let i = 0; i <= 30; i++) {
+          const t = i / 30;
+          const lat = (1 - t) ** 2 * a[0] + 2 * (1 - t) * t * cLat + t * t * b[0];
+          const lon = (1 - t) ** 2 * lon1 + 2 * (1 - t) * t * cLon + t * t * lon2;
+          pts.push([mx(lon), my(lat)]);
+        }
+      } else {
+        const lane = key === "tanker" ? (SEA_LANES[cityName(route.from) + ">" + cityName(route.to)] || []) : [];
+        pts = [a, ...lane, b].map(([lat, lon]) => [mx(lon), my(lat)]);
+      }
+      return (routePathCache[id] = pts);
+    }
+    // Point at fraction f (0…1) along a path
+    function pointAt(pts, f) {
+      const seg = [];
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); total += d; }
+      let want = Math.max(0, Math.min(1, f)) * total;
+      for (let i = 0; i < seg.length; i++) {
+        if (want <= seg[i] || i === seg.length - 1) {
+          const t = seg[i] ? Math.min(1, want / seg[i]) : 0;
+          return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t];
+        }
+        want -= seg[i];
+      }
+      return pts[0];
+    }
+    const wrapX = (x) => ((x % MAP_W) + MAP_W) % MAP_W;
+
+    if (!state.mapShow) state.mapShow = { truck: true, tanker: true, plane: true };
+    function renderMapBase() {
+      const land = LAND.map(poly => `<polygon points="${poly.map(([lon, lat]) => mx(lon).toFixed(1) + "," + my(lat).toFixed(1)).join(" ")}"/>`).join("");
+      let grid = "";
+      for (let lon = -150; lon <= 150; lon += 30) grid += `<line x1="${mx(lon)}" x2="${mx(lon)}" y1="0" y2="${MAP_H}"/>`;
+      for (let lat = 60; lat >= -40; lat -= 20) grid += `<line x1="0" x2="${MAP_W}" y1="${my(lat)}" y2="${my(lat)}"/>`;
+      $("worldMap").innerHTML = `<svg viewBox="0 0 ${MAP_W} ${MAP_H}" id="mapSvg">
+        <rect width="${MAP_W}" height="${MAP_H}" fill="url(#ocean)"/>
+        <defs><linearGradient id="ocean" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16325c"/><stop offset="1" stop-color="#0d2140"/></linearGradient></defs>
+        <g class="mapGrid">${grid}</g><g class="mapLand">${land}</g>
+        <g id="mapRoutes"></g><g id="mapVehicles"></g></svg>
+        <div class="mapTip" id="mapTip" hidden></div>`;
+    }
+    // Where each vehicle is right now, and what to show when you hover it
+    function mapItems() {
+      const items = [];
+      for (const key of ["truck", "tanker", "plane"]) {
+        if (!state.mapShow[key]) continue;
+        const F = FLEETS[key];
+        for (const v of fleetList(key)) {
+          if (v.contract) {
+            const r = F.routes[v.contract.route], pts = routePath(key, r);
+            if (!pts) continue;
+            const f = 1 - v.contract.left / v.contract.seconds;
+            const [x, y] = pointAt(pts, f);
+            items.push({ key, v, x, y, pts, moving: true,
+              tip: `<b>${F.icon} ${v.name}</b><br>${r.from} → ${r.to}<br>${Math.round(f * 100)}% · ${clockLong(v.contract.left)} left<br><span class="income">+${fmt(contractPayout(key, v.contract.profit))} on arrival</span>` });
+          } else {
+            const home = v.city || MAP_HOME[key], c = CITY[home] || CITY[MAP_HOME[key]];
+            items.push({ key, v, x: mx(c[1]), y: my(c[0]), moving: false, home,
+              tip: v.broken ? `<b>${F.icon} ${v.name}</b><br>🔧 Broken down in ${home}<br>Repair: ${fmt(v.broken.cost)}`
+                            : `<b>${F.icon} ${v.name}</b><br>Waiting for a contract in ${home}` });
+          }
+        }
+      }
+      // vehicles parked in the same city spread out in a small circle
+      const groups = {};
+      items.filter(i => !i.moving).forEach(i => (groups[i.home] = groups[i.home] || []).push(i));
+      for (const g of Object.values(groups)) if (g.length > 1) g.forEach((i, k) => {
+        const ang = (k / g.length) * Math.PI * 2, rad = 7 + g.length * 0.8;
+        i.x += Math.cos(ang) * rad; i.y += Math.sin(ang) * rad;
+      });
+      return items;
+    }
+    let mapItemsNow = [];
+    function renderMapVehicles() {
+      if (!$("mapSvg")) renderMapBase();
+      mapItemsNow = mapItems();
+      // route lines of moving vehicles (drawn again one map-width left and right, for Pacific flights)
+      $("mapRoutes").innerHTML = mapItemsNow.filter(i => i.moving).map(i => {
+        const pts = i.pts.map(p => p.join(",")).join(" ");
+        return [-MAP_W, 0, MAP_W].map(dx => `<polyline points="${pts}" transform="translate(${dx},0)" stroke="${MAP_COLOR[i.key]}"/>`).join("");
+      }).join("");
+      $("mapVehicles").innerHTML = mapItemsNow.map((i, n) => {
+        const x = wrapX(i.x), r = i.key === "truck" ? 8 : 9.5;
+        const ring = i.v.broken ? "#ff5252" : i.moving ? MAP_COLOR[i.key] : "#8a8fa8";
+        return `<g class="mapIcon ${i.moving ? "" : "idle"}" data-mi="${n}" transform="translate(${x.toFixed(1)},${i.y.toFixed(1)})">
+          <circle r="${r}" fill="#0b1426" stroke="${ring}" stroke-width="2"/>
+          <text y="4" text-anchor="middle" font-size="${i.key === "truck" ? 9 : 10.5}">${i.v.broken ? "🔧" : FLEETS[i.key].icon}</text></g>`;
+      }).join("");
+      $("mapCounts").textContent = ["truck", "tanker", "plane"].map(k => {
+        const list = fleetList(k), moving = list.filter(v => v.contract).length;
+        return `${FLEETS[k].icon} ${moving}/${list.length} on the move`;
+      }).join(" · ");
+    }
+    function showMapTip(e) {
+      const g = e.target.closest("[data-mi]");
+      const tip = $("mapTip");
+      if (!g) { tip.hidden = true; return; }
+      const item = mapItemsNow[Number(g.dataset.mi)];
+      if (!item) return;
+      tip.innerHTML = item.tip;
+      tip.hidden = false;
+      const box = $("worldMap").getBoundingClientRect(), r = g.getBoundingClientRect();
+      const left = r.left - box.left + r.width / 2, top = r.top - box.top;
+      tip.style.left = Math.max(4, Math.min(box.width - 214, left - 105)) + "px";
+      tip.style.top = (top > 110 ? top - tip.offsetHeight - 8 : top + r.height + 8) + "px";
+    }
+    function updateMapControls() {
+      $("worldMapWrap").hidden = !!state.mapHidden;
+      $("mapToggle").textContent = state.mapHidden ? "▸ Show" : "▾ Minimize";
+      document.querySelectorAll("[data-mapshow]").forEach(b => b.classList.toggle("on", !!state.mapShow[b.dataset.mapshow]));
+    }
+    $("worldMap").addEventListener("mousemove", showMapTip);
+    $("worldMap").addEventListener("mouseleave", () => { $("mapTip").hidden = true; });
+    $("worldMap").addEventListener("click", showMapTip);   // tap on phones
+    $("mapCard").addEventListener("click", (e) => {
+      if (e.target.closest("#mapToggle")) { state.mapHidden = !state.mapHidden; updateMapControls(); save(); return; }
+      const f = e.target.closest("[data-mapshow]");
+      if (f) { state.mapShow[f.dataset.mapshow] = !state.mapShow[f.dataset.mapshow]; updateMapControls(); renderMapVehicles(); save(); }
+    });
+    renderMapBase();
+    updateMapControls();
+    setInterval(() => { if (!$("logisticsView").hidden && !state.mapHidden) renderMapVehicles(); }, 1000);
 
     /* =====================================================================
        ACHIEVEMENTS: checked every second. Each one has a goal and a function that

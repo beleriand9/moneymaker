@@ -333,6 +333,9 @@
     .cryptoName { display: flex; align-items: center; gap: 10px; min-width: 130px; }
     .cryptoIcon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
                   font-size: 22px; font-weight: 900; background: linear-gradient(160deg, #ffb300, #f57c00); color: #fff; }
+    .cryptoSvg { display: block; width: 100%; height: 320px; }
+    .chartMode { display: inline-flex; gap: 4px; margin-right: 10px; }
+    .chartMode .btn.on { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
     .cryptoStatus { font-size: 13px; font-weight: 800; color: #ffb347; margin-right: 8px; }
     .cryptoStatus.on { color: #5be08f; }
     .levelTableWrap { max-height: 55vh; overflow-y: auto; margin: 12px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
@@ -1254,7 +1257,8 @@
             <!-- Live crypto market (real prices from Binance, or Coinbase as a backup) -->
             <div class="card" id="cryptoCard">
               <div class="row"><h3>📡 Live crypto market</h3>
-                <span><span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
+                <span><span class="chartMode"><button class="btn ghost small" data-cmode="line">📈 Line</button><button class="btn ghost small" data-cmode="candles">🕯️ Candles</button></span>
+        <span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
                 <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
               <div class="muted infoBox" id="info-crypto" hidden>Trade <b>Bitcoin, Ethereum and Solana at their real, live prices</b> (1 US dollar = 1 bcoin),
                 streamed every second from Binance (or Coinbase if Binance isn't reachable). Prices move with the real market, 24/7, up or down.
@@ -6217,8 +6221,22 @@
     if (!inv.crypto) inv.crypto = {};
     for (const c of CRYPTOS) if (!inv.crypto[c.sym]) inv.crypto[c.sym] = { qty: 0, cost: 0, last: 0 };
     if (!inv.stats.crypto) inv.stats.crypto = { in: 0, out: 0 };
-    const live = {};   // sym -> { price, open, at, hist: [] }  (not saved)
-    for (const c of CRYPTOS) live[c.sym] = { price: inv.crypto[c.sym].last || 0, open: 0, at: 0, hist: [] };
+    const live = {};   // sym -> { price, open, at, candles: [{ t, o, h, l, c, v }] }  (1-minute candles, v = volume in USD; not saved)
+    for (const c of CRYPTOS) live[c.sym] = { price: inv.crypto[c.sym].last || 0, open: 0, at: 0, candles: [] };
+    const CANDLE_MS = 60000, CANDLES_KEEP = 90;
+    // Adds or updates a 1-minute candle (Binance sends whole candles; for Coinbase we build them from trades)
+    function putCandle(sym, t, o, h, l, c, v, add) {
+      const list = live[sym].candles;
+      let k = list.length && list[list.length - 1].t === t ? list[list.length - 1] : null;
+      if (!k) {
+        if (list.length && t < list[list.length - 1].t) return;
+        k = { t, o, h, l, c, v: 0 };
+        list.push(k);
+        if (list.length > CANDLES_KEEP) list.shift();
+      }
+      if (add) { k.h = Math.max(k.h, h); k.l = Math.min(k.l, l); k.c = c; k.v += v; }
+      else { k.o = o; k.h = h; k.l = l; k.c = c; k.v = v; }
+    }
     let cryptoSource = "", cryptoWs = null, cryptoTries = 0;
 
     function cryptoFee() {
@@ -6245,11 +6263,15 @@
       let ws;
       try {
         if (source === "binance") {
-          ws = new WebSocket("wss://data-stream.binance.vision/stream?streams=" + CRYPTOS.map(c => c.binance.toLowerCase() + "@miniTicker").join("/"));
+          const streams = CRYPTOS.flatMap(c => [c.binance.toLowerCase() + "@miniTicker", c.binance.toLowerCase() + "@kline_1m"]);
+          ws = new WebSocket("wss://data-stream.binance.vision/stream?streams=" + streams.join("/"));
           ws.onmessage = (e) => {
             const d = (JSON.parse(e.data) || {}).data;
             const c = d && CRYPTOS.find(x => x.binance === d.s);
-            if (c) { got = true; cryptoTries = 0; onPrice(c.sym, +d.c, +d.o); }
+            if (!c) return;
+            got = true; cryptoTries = 0;
+            if (d.e === "kline") { const k = d.k; putCandle(c.sym, k.t, +k.o, +k.h, +k.l, +k.c, +k.q, false); }
+            else onPrice(c.sym, +d.c, +d.o);
           };
         } else {
           ws = new WebSocket("wss://ws-feed.exchange.coinbase.com");
@@ -6257,7 +6279,11 @@
           ws.onmessage = (e) => {
             const d = JSON.parse(e.data);
             const c = d && d.type === "ticker" && CRYPTOS.find(x => x.coinbase === d.product_id);
-            if (c) { got = true; cryptoTries = 0; onPrice(c.sym, +d.price, +d.open_24h); }
+            if (c) {
+              got = true; cryptoTries = 0; onPrice(c.sym, +d.price, +d.open_24h);
+              const p = +d.price, t = Math.floor(Date.now() / CANDLE_MS) * CANDLE_MS;
+              putCandle(c.sym, t, p, p, p, p, p * (+d.last_size || 0), true);
+            }
           };
         }
       } catch (e) { ws = null; }
@@ -6277,9 +6303,10 @@
     async function seedCryptoHistory() {
       for (const c of CRYPTOS) {
         try {
-          const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${c.binance}&interval=1m&limit=60`);
+          const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${c.binance}&interval=1m&limit=${CANDLES_KEEP}`);
           const rows = await r.json();
-          if (Array.isArray(rows) && rows.length) live[c.sym].hist = rows.map(k => +k[4]);
+          if (Array.isArray(rows) && rows.length)
+            live[c.sym].candles = rows.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[7] })).slice(-CANDLES_KEEP);
         } catch (e) {}
       }
     }
@@ -6331,6 +6358,68 @@
       const pl = got - costPart;
       cryptoMsg(sym, `Sold ${qty.toFixed(6)} ${sym} for ${fmt(got)} (fee ${fmt(fee)}) · ${pl >= 0 ? "profit +" : "loss −"}${fmt(Math.abs(pl))}${xp ? ` · +${xp} XP` : ""}.`, pl >= 0);
       updateCounter(); updateInvestLive(); save(); renderCryptoNumbers();
+    }
+    /* ----- Crypto chart: line or candlesticks, with volume bars underneath. Hover for details. ----- */
+    const CC = { W: 800, H: 320, L: 8, R: 70, T: 12, PB: 228, VT: 240, VB: 302 };   // price area T..PB, volume area VT..VB
+    const shortVol = (v) => v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "k" : v.toFixed(0);
+    function drawCryptoCharts() { for (const c of CRYPTOS) drawCryptoChart(c.sym); }
+    function drawCryptoChart(sym) {
+      const box = $("cchart-" + sym), ks = live[sym].candles;
+      if (!box || ks.length < 2) return;
+      const mode = state.cryptoChart === "candles" ? "candles" : "line";
+      let lo = Math.min(...ks.map(k => k.l)), hi = Math.max(...ks.map(k => k.h));
+      if (hi - lo < hi * 1e-5) { lo -= hi * 1e-4; hi += hi * 1e-4; }
+      const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+      const vmax = Math.max(...ks.map(k => k.v), 1);
+      const n = ks.length, step = (CC.W - CC.L - CC.R) / n;
+      const X = (i) => CC.L + step * (i + 0.5);
+      const Y = (p) => CC.T + (CC.PB - CC.T) * (1 - (p - lo) / (hi - lo));
+      const V = (v) => CC.VB - (CC.VB - CC.VT) * (v / vmax);
+      const dec = hi >= 1000 ? 0 : 2;
+      let g = "";
+      for (let i = 0; i <= 4; i++) {
+        const p = lo + (hi - lo) * i / 4;
+        g += `<line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${Y(p)}" y2="${Y(p)}" stroke="#fff" stroke-opacity="0.07"/>
+              <text x="${CC.W - CC.R + 6}" y="${Y(p) + 4}" fill="#8d8da3" font-size="11">${p.toLocaleString(undefined, { maximumFractionDigits: dec })}</text>`;
+      }
+      g += `<text x="${CC.W - CC.R + 6}" y="${CC.VT + 10}" fill="#8d8da3" font-size="10">Vol</text>
+            <text x="${CC.W - CC.R + 6}" y="${CC.VT + 24}" fill="#8d8da3" font-size="10">${shortVol(vmax)}</text>
+            <line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${CC.VB}" y2="${CC.VB}" stroke="#fff" stroke-opacity="0.12"/>`;
+      let vol = "", body = "";
+      ks.forEach((k, i) => {
+        const up = k.c >= k.o, col = up ? "#26a69a" : "#ef5350", w = Math.max(1, step * 0.7);
+        vol += `<rect x="${X(i) - w / 2}" y="${V(k.v)}" width="${w}" height="${CC.VB - V(k.v)}" fill="${col}" opacity="0.45"/>`;
+        if (mode === "candles") {
+          const top = Y(Math.max(k.o, k.c)), bot = Y(Math.min(k.o, k.c));
+          body += `<line x1="${X(i)}" x2="${X(i)}" y1="${Y(k.h)}" y2="${Y(k.l)}" stroke="${col}" stroke-width="1.2"/>
+                   <rect x="${X(i) - w / 2}" y="${top}" width="${w}" height="${Math.max(1, bot - top)}" fill="${col}"/>`;
+        }
+      });
+      const first = ks[0].o, last = ks[n - 1].c, upAll = last >= first, lineCol = upAll ? "#5be08f" : "#ff6b6b";
+      if (mode === "line") {
+        const pts = ks.map((k, i) => `${X(i)},${Y(k.c)}`).join(" ");
+        body = `<polygon points="${X(0)},${CC.PB} ${pts} ${X(n - 1)},${CC.PB}" fill="${lineCol}" opacity="0.12"/>
+                <polyline points="${pts}" fill="none" stroke="${lineCol}" stroke-width="2"/>`;
+      }
+      body += `<line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${Y(last)}" y2="${Y(last)}" stroke="${lineCol}" stroke-opacity="0.5" stroke-dasharray="4 4"/>`;
+      const chg = (last / first - 1) * 100;
+      box.innerHTML = `<div class="chartHead"><span>${mode === "candles" ? "Candlesticks" : "Line"} · 1-minute · last ${n} min · volume in bcoin</span>
+          <span style="color:${lineCol}; font-weight:700">${priceText(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%)</span></div>
+        <svg class="cryptoSvg" viewBox="0 0 ${CC.W} ${CC.H}" preserveAspectRatio="none">${g}${vol}${body}
+          <line class="xh" x1="0" x2="0" y1="${CC.T}" y2="${CC.VB}" stroke="#fff" stroke-opacity="0.35" visibility="hidden"/></svg>
+        <div class="chartTip" hidden></div>`;
+      const svg = box.querySelector("svg"), tip = box.querySelector(".chartTip"), xh = box.querySelector(".xh");
+      svg.onmousemove = (e) => {
+        const r = svg.getBoundingClientRect();
+        const i = Math.max(0, Math.min(n - 1, Math.floor(((e.clientX - r.left) / r.width * CC.W - CC.L) / step)));
+        const k = ks[i];
+        xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.setAttribute("visibility", "visible");
+        const time = new Date(k.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        tip.hidden = false;
+        tip.innerHTML = `<b>${time}</b><br>O ${priceText(k.o)} · H ${priceText(k.h)}<br>L ${priceText(k.l)} · C ${priceText(k.c)}<br>Vol ${shortVol(k.v)}`;
+        tip.style.left = Math.min(r.width - 170, Math.max(0, X(i) / CC.W * r.width - 80)) + "px";
+      };
+      svg.onmouseleave = () => { tip.hidden = true; xh.setAttribute("visibility", "hidden"); };
     }
     const priceText = (p) => p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -6386,13 +6475,9 @@
     let cryptoTicks = 0;
     setInterval(() => {
       cryptoTicks++;
-      if (cryptoTicks % 5 === 0) for (const c of CRYPTOS) {
-        const L = live[c.sym];
-        if (cryptoLive(c.sym)) { L.hist.push(L.price); if (L.hist.length > 240) L.hist.shift(); }
-      }
-      if ($("investView").hidden) return;
+      if ($("investView").hidden || $("livePane").hidden) return;
       renderCryptoNumbers();
-      if (cryptoTicks % 5 === 0) for (const c of CRYPTOS) if (live[c.sym].hist.length > 1) drawChart("cchart-" + c.sym, live[c.sym].hist, "Live price · last hour + since you opened the game");
+      if (cryptoTicks % 2 === 0) drawCryptoCharts();
     }, 1000);
 
     $("cryptoList").addEventListener("click", (e) => {
@@ -6409,8 +6494,18 @@
       $("investPane").hidden = state.investPage !== "invest";
       $("livePane").hidden = state.investPage !== "live";
       document.querySelectorAll("[data-isub]").forEach(b => b.classList.toggle("active", b.dataset.isub === state.investPage));
-      if (state.investPage === "live") { renderCryptoNumbers(); for (const c of CRYPTOS) if (live[c.sym].hist.length > 1) drawChart("cchart-" + c.sym, live[c.sym].hist, "Live price · last hour + since you opened the game"); }
+      if (state.investPage === "live") { renderCryptoNumbers(); drawCryptoCharts(); }
     }
+    function updateChartModeButtons() {
+      document.querySelectorAll("[data-cmode]").forEach(b => b.classList.toggle("on", (state.cryptoChart || "line") === b.dataset.cmode));
+    }
+    document.querySelector(".chartMode").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-cmode]");
+      if (!b) return;
+      state.cryptoChart = b.dataset.cmode;
+      updateChartModeButtons(); drawCryptoCharts(); save();
+    });
+    updateChartModeButtons();
     document.querySelector(".subNav").addEventListener("click", (e) => {
       const b = e.target.closest("[data-isub]");
       if (b) { showInvestPage(b.dataset.isub); save(); }

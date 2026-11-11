@@ -1302,7 +1302,7 @@
         priceMultiplier: 2,
         // Unlock: first hotel at investor level 5, then one more every 10 levels
         unlock: () => {
-          const lvl = levelInfo((state.invest && state.invest.xp) || 0).level;
+          const lvl = levelInfo((state.invest && state.invest.xp) || 0, INVEST_XP).level;
           return lvl < 5 ? 0 : 1 + Math.floor((lvl - 5) / 10);
         },
         unlockText: (owned) => `Hotel #${owned + 1} unlocks at investor level ${5 + owned * 10} (invest in the 📈 Investing tab)`,
@@ -1322,7 +1322,7 @@
         maxOwned: 1,        // you can only have one
         priceMultiplier: 1,
         // Unlock: investor level 10
-        unlock: () => levelInfo((state.invest && state.invest.xp) || 0).level >= 10 ? 1 : 0,
+        unlock: () => levelInfo((state.invest && state.invest.xp) || 0, INVEST_XP).level >= 10 ? 1 : 0,
         unlockText: () => `Unlocks at investor level 10 (invest in the 📈 Investing tab)`,
         maxEmployees: 20,   // includes the accountant and HR, so 18 workers
         hireBaseCost: 0,    // first worker is free...
@@ -2390,51 +2390,58 @@
     let currentGame = null;   // null = game list
 
     /* =====================================================================
-       GAMBLER & INVESTOR LEVELS (same curve): XP is earned by playing time, not bet size.
-         Casino: every round gives 1 XP (Classic), 2 XP (High rollers, Plinko, Sky Climb) or 4 XP (Super high rollers).
-                 At most one round every 15 seconds earns XP (so fast games can't be farmed).
-         Investing: every minute with at least 1,000 invested gives 4 XP, 8 XP from 1 scoin, 16 XP from 100 scoin.
-       Total XP needed: 0.147 * level^2.76  →  level 10 = 85, level 50 = 7,186, level 99 = 47,345.
-       Typical play (Classic → High → Super tables): level 50 in about 13 h, level 99 in about 55 h.
-       Each Gambler level gives 0.1% cashback on lost bets (level 10 = 1%). Max level 99.
+       GAMBLER LEVEL: XP = bcoin bet × the game's XP multiplier (longer rounds give more XP per bet).
+         Curve: XP = 3.738 * level^6.728  →  level 10 ≈ 20 million, level 50 ≈ 1 trillion, level 99 ≈ 100 trillion
+         Multipliers: Plinko ×1, Sky Climb ×1, Video Poker ×1, Roulette ×2, Blackjack ×4, Ultimate Texas Hold'em ×5,
+                      and ×2 on top at every Super high roller table.
+         Each level gives 0.1% cashback on lost bets (level 10 = 1%). Max level 99.
+       INVESTOR LEVEL: XP for every minute you have money invested (4 / 8 / 16 XP per minute).
+         Curve: XP = 0.147 * level^2.76  →  level 50 = 7,186 (about 13 h), level 99 = 47,345 (about 55 h)
        ===================================================================== */
     const MAX_LEVEL = 99;
-    const XP_CURVE_A = 0.147;
-    const XP_CURVE_K = 2.76;
 
-    // LEVEL_XP[L] = total XP needed to reach level L
+    // LEVEL_XP[L] = total Gambler XP needed to reach level L (each step rounded to 3 digits)
     const LEVEL_XP = [0, 0];
-    for (let L = 2; L <= MAX_LEVEL; L++) LEVEL_XP[L] = Math.max(LEVEL_XP[L - 1] + 1, Math.round(XP_CURVE_A * Math.pow(L, XP_CURVE_K)));
+    for (let L = 2; L <= MAX_LEVEL; L++) {
+      const raw = 3.738 * (Math.pow(L, 6.728) - Math.pow(L - 1, 6.728));
+      const p = Math.pow(10, Math.floor(Math.log10(raw)) - 2);
+      LEVEL_XP[L] = LEVEL_XP[L - 1] + Math.round(raw / p) * p;
+    }
+    // INVEST_XP[L] = total Investor XP needed to reach level L
+    const INVEST_XP = [0, 0];
+    for (let L = 2; L <= MAX_LEVEL; L++) INVEST_XP[L] = Math.max(INVEST_XP[L - 1] + 1, Math.round(0.147 * Math.pow(L, 2.76)));
 
-    // Old saves used "1 XP per bcoin" with a much steeper curve: keep the same level and progress
-    if (!state.xpVersion) {
-      const OLD = [0, 0];
-      for (let L = 2; L <= MAX_LEVEL; L++) {
-        const raw = 3.738 * (Math.pow(L, 6.728) - Math.pow(L - 1, 6.728));
-        const p = Math.pow(10, Math.floor(Math.log10(raw)) - 2);
-        OLD[L] = OLD[L - 1] + Math.round(raw / p) * p;
-      }
-      const convert = (xp) => {
-        xp = xp || 0;
-        let L = 1;
-        while (L < MAX_LEVEL && xp >= OLD[L + 1]) L++;
-        if (L >= MAX_LEVEL) return LEVEL_XP[MAX_LEVEL];
-        const frac = (xp - OLD[L]) / (OLD[L + 1] - OLD[L]);
-        return Math.floor(LEVEL_XP[L] + frac * (LEVEL_XP[L + 1] - LEVEL_XP[L]));
-      };
-      state.casinoXp = convert(state.casinoXp);
-      if (state.invest) state.invest.xp = convert(state.invest.xp);
-      state.xpVersion = 2;
+    // Moves XP from one curve to another, keeping the same level and progress
+    function convertXp(xp, from, to) {
+      xp = xp || 0;
+      let L = 1;
+      while (L < MAX_LEVEL && xp >= from[L + 1]) L++;
+      if (L >= MAX_LEVEL) return to[MAX_LEVEL];
+      const frac = (xp - from[L]) / (from[L + 1] - from[L]);
+      return Math.floor(to[L] + frac * (to[L + 1] - to[L]));
+    }
+    // Save versions: 1 = both levels on the bcoin curve, 2 = both on the time curve, 3 = Gambler bcoin / Investor time
+    if ((state.xpVersion || 1) < 3) {
+      if (state.xpVersion === 2) state.casinoXp = convertXp(state.casinoXp, INVEST_XP, LEVEL_XP);
+      else if (state.invest) state.invest.xp = convertXp(state.invest.xp, LEVEL_XP, INVEST_XP);
+      state.xpVersion = 3;
+    }
+
+    // XP multiplier for each casino game (by how long a round takes), ×2 more at Super high roller tables
+    const XP_GAME_MULT = { roulette: 2, bj: 4, vp: 1, uth: 5, plinko: 1, climb: 1 };
+    function xpMult(id = currentGame || "") {
+      const game = Object.keys(XP_GAME_MULT).find(k => id.startsWith(k));
+      return (game ? XP_GAME_MULT[game] : 1) * (/Super/.test(id) ? 2 : 1);
     }
     const CASHBACK_PER_LEVEL = 0.001;   // 0.1%
 
     if (typeof state.casinoXp !== "number") state.casinoXp = 0;
 
-    function levelInfo(xp) {
+    function levelInfo(xp, curve = LEVEL_XP) {   // Gambler curve by default; pass INVEST_XP for the Investor level
       let level = 1;
-      while (level < MAX_LEVEL && xp >= LEVEL_XP[level + 1]) level++;
+      while (level < MAX_LEVEL && xp >= curve[level + 1]) level++;
       if (level >= MAX_LEVEL) return { level, into: 0, need: 0, max: true };
-      return { level, into: xp - LEVEL_XP[level], need: LEVEL_XP[level + 1] - LEVEL_XP[level], max: false };
+      return { level, into: xp - curve[level], need: curve[level + 1] - curve[level], max: false };
     }
     const cashbackRate = () => levelInfo(state.casinoXp).level * CASHBACK_PER_LEVEL + 0.05 * lawCount("criminal");
     const pct = (r) => (r * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) + "%";
@@ -2463,21 +2470,10 @@
         : fmtNum(info.into) + " / " + fmtNum(info.need) + " XP to level " + (info.level + 1);
     }
 
-    // XP for a finished casino round, by table size; at most one round every 15 seconds counts
-    const XP_ROUND_GAP = 15000;
-    function roundXp() {
-      const id = currentGame || "";
-      if (/Super/.test(id)) return 4;
-      if (/High/.test(id) || id === "plinko" || id === "climb") return 2;
-      return 1;
-    }
-    // Gives this round's XP and returns how many levels you gained
-    function addXp() {
-      const now = Date.now();
-      if (now - (state.lastXpAt || 0) < XP_ROUND_GAP) return 0;
-      state.lastXpAt = now;
+    // Adds XP for a bet (bet × the game's multiplier) and returns how many levels you gained
+    function addXp(amount) {
       const before = levelInfo(state.casinoXp).level;
-      state.casinoXp += roundXp();
+      state.casinoXp += amount * xpMult();
       const gained = levelInfo(state.casinoXp).level - before;
       updateCasinoLevel();
       if (gained > 0) {
@@ -2493,7 +2489,8 @@
       setTimeout(updateVipBar, 0);
       if (!currentGame) {
         const gameCard = (g) => `<button class="card gameCard" data-game="${g.id}">
-             <h3>${g.emoji} ${g.name}</h3><div class="muted">${g.desc}</div></button>`;
+             <h3>${g.emoji} ${g.name}</h3><div class="muted">${g.desc}</div>
+             <div class="muted" style="color:#b388ff; margin-top:4px">✨ XP ×${xpMult(g.id)}</div></button>`;
         box.innerHTML = `<h2>Choose a game</h2>` + CASINO_GROUPS.map(group => `
           <div class="card gameGroup">
             <h2 style="margin:0 0 10px">${group.name}</h2>
@@ -2898,7 +2895,7 @@
         if (result === 0 && keys.length === 1 && keys[0] === "n0") state.stats.rouletteZeroOnly = true;
         countPlay("roulette");
         if ((table.bets.red || 0) >= 500000000 || (table.bets.black || 0) >= 500000000) state.stats.redBlack500 = true;
-        const levelsGained = addXp();      // XP for this round
+        const levelsGained = addXp(bet);      // XP = bet × game multiplier
         setBets(table, {});
         table.spinning = false;
         table.lastResult = result;
@@ -2936,7 +2933,8 @@
     if (!state.invest) state.invest = { xp: 0, properties: [], etf: 0, etfTimer: ETF_EVERY, etfHistory: [] };
     const inv = state.invest;
 
-    const investLevel = () => levelInfo(inv.xp).level;
+    const investLevel = () => levelInfo(inv.xp, INVEST_XP).level;
+    const RE_LEVEL_BONUS = 0.001;   // +0.1% on property sales per investor level
     const etfFee = () => Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (investLevel() - 1));
 
     function investMessage(text, good) {
@@ -2945,10 +2943,10 @@
     }
 
     function updateInvestLevel() {
-      const info = levelInfo(inv.xp);
+      const info = levelInfo(inv.xp, INVEST_XP);
       $("investLevelNum").textContent = info.level;
       $("investLevelText").textContent = info.level + (info.max ? " (MAX)" : "");
-      $("investFeeText").textContent = "ETF cash-out fee " + pct(etfFee());
+      $("investFeeText").textContent = "ETF cash-out fee " + pct(etfFee()) + " · property sales +" + pct(RE_LEVEL_BONUS * investLevel());
       $("etfFeeInline").textContent = pct(etfFee());
       $("investXpFill").style.width = info.max ? "100%" : (100 * info.into / info.need) + "%";
       $("investXpText").textContent = info.max ? "Max level reached!"
@@ -3033,6 +3031,11 @@
         investRecord("re", 0, bonus);          // counts toward real estate profit (and new agents)
         bonusText = ` 🏢 Agency bonus +${fmt(bonus)}.`;
       }
+      // 📈 Investor level: +0.1% on every property sale per level
+      const lvlBonus = p.value * RE_LEVEL_BONUS * investLevel();
+      state.money += lvlBonus;
+      investRecord("re", 0, lvlBonus);
+      bonusText += ` 📈 Investor level +${fmt(lvlBonus)}.`;
       const reLawyers = lawCount("realestate");
       if (reLawyers > 0) {
         const bonus = p.value * 0.02 * reLawyers;
@@ -3790,7 +3793,7 @@
       state.casinoChips += back + cashback;
       casinoRecord(wagered, back + cashback);
       state.bj[t.id].inPlay = 0;
-      const levelsGained = addXp();         // XP for this round (doubles and splits count)
+      const levelsGained = addXp(wagered);         // XP = bet × game multiplier (doubles and splits count)
 
       const net = back - wagered;
       t.message = (t.message ? t.message + " " : "") + (insuranceText ? insuranceText + " " : "") +
@@ -4093,7 +4096,7 @@
       state.casinoChips += back + jackpot + cashback;
       casinoRecord(bet, back + jackpot + cashback);
       state.vp[t.id].inPlay = 0;
-      const levelsGained = addXp();   // XP for this round
+      const levelsGained = addXp(bet);   // XP = bet × game multiplier
 
       t.result = cat;
       t.jackpotWon = jackpot > 0;
@@ -4435,7 +4438,7 @@
       state.casinoChips += back + cashback;
       casinoRecord(wagered, back + cashback);
       state.uth[t.id].inPlay = 0;
-      const levelsGained = addXp();   // XP for this round (raises and Trips count)
+      const levelsGained = addXp(wagered);   // XP = bet × game multiplier (raises and Trips count)
       const net = back - wagered;
       t.message = `Dealer has ${t.dealerHand}${qualifies ? "" : " (doesn't qualify: Antes push)"}. ` +
         (net > 0 ? `You won ${fmt(net)}!` : net < 0 ? `You lost ${fmt(-net)}.` : "You broke even.") +
@@ -4758,7 +4761,7 @@
       Object.assign(climb, { active: true, stake: climb.bet, step: 0, shield: false, balls: climbMachine(),
                              drawn: [], tookHalf: false, banked: 0, message: "", crashed: false, lastBet: climb.bet });
       state.climbInPlay = climb.stake;
-      addXp();                 // XP for this round
+      addXp(climb.bet);                 // XP = bet × game multiplier
       updateCounter(); save();
       await climbDraw();
     }
@@ -5422,7 +5425,7 @@
       if (vipBall) state.plinkoVipInPlay += total; else state.plinkoInPlay += total;
       casinoRecord(total, 0);
       countPlay("plinko", n);                          // every ball is one game
-      addXp();                                   // XP for this round
+      addXp(total);                                   // XP = bet × game multiplier
       if (plinko.balls.length === 0) { plinko.roundBet = 0; plinko.roundWin = 0; }
       plinko.roundBet += total;
       plinko.message = "";
@@ -6084,8 +6087,8 @@
       { id: "petf100s",   cat: "invest", icon: "🏛️", name: "Wall Street insider", desc: "100 scoin all-time Broker ETF profit", goal: 100 * SC, get: () => investProfit("petf"), money: true },
       { id: "gold1s",     cat: "invest", icon: "🥇", name: "Golden touch",       desc: "1 scoin all-time gold profit",        goal: SC, get: () => goldProfit(), money: true },
       { id: "petfFull",   cat: "invest", icon: "🏦", name: "Insider",            desc: "Fill the Broker ETF (10 scoin invested)", goal: 10 * SC, get: () => investCurrent("petf"), money: true },
-      { id: "ilevel10",   cat: "invest", icon: "📊", name: "Analyst",            desc: "Reach Investor level 10",             goal: 10, get: () => levelInfo(inv.xp).level },
-      { id: "ilevel25",   cat: "invest", icon: "🐂", name: "Wolf of Wall Street", desc: "Reach Investor level 25",            goal: 25, get: () => levelInfo(inv.xp).level },
+      { id: "ilevel10",   cat: "invest", icon: "📊", name: "Analyst",            desc: "Reach Investor level 10",             goal: 10, get: () => levelInfo(inv.xp, INVEST_XP).level },
+      { id: "ilevel25",   cat: "invest", icon: "🐂", name: "Wolf of Wall Street", desc: "Reach Investor level 25",            goal: 25, get: () => levelInfo(inv.xp, INVEST_XP).level },
       // Logistics
       { id: "truck15",    cat: "logistics", icon: "🚛", name: "Trucking company", desc: "Buy 15 semi-trucks",                 goal: 15, get: () => logi.trucks.length },
       { id: "tanker1",    cat: "logistics", icon: "🚢", name: "Set sail",         desc: "Buy your first oil tanker",          goal: 1,  get: () => logi.tankers.length },
@@ -6328,7 +6331,8 @@
     function showLevelTable(kind) {
       const gam = kind === "gambler";
       const xp = gam ? state.casinoXp : inv.xp;
-      const cur = levelInfo(xp).level;
+      const curve = gam ? LEVEL_XP : INVEST_XP;
+      const cur = levelInfo(xp, curve).level;
       const unlock = (L) => {
         const u = [];
         if (gam && L >= 5 && (L - 5) % 10 === 0) u.push(`🎰 Casino #${(L - 5) / 10 + 1}`);
@@ -6337,20 +6341,20 @@
         return u.join(", ");
       };
       const perk = (L) => gam ? `${(CASHBACK_PER_LEVEL * L * 100).toFixed(1)}% cashback`
-                              : `${(Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (L - 1)) * 100).toFixed(1)}% ETF fee`;
+                              : `${(Math.max(0, ETF_BASE_FEE - ETF_FEE_PER_LEVEL * (L - 1)) * 100).toFixed(1)}% ETF fee · +${(RE_LEVEL_BONUS * L * 100).toFixed(1)}% property sales`;
       let rows = "";
       for (let L = 1; L <= MAX_LEVEL; L++) {
-        const step = L === 1 ? 0 : LEVEL_XP[L] - LEVEL_XP[L - 1];
+        const step = L === 1 ? 0 : curve[L] - curve[L - 1];
         rows += `<tr class="${L === cur ? "now" : L < cur ? "done" : ""}" ${L === cur ? 'id="levelNow"' : ""}>
-          <td>${L}</td><td>${fmtNum(LEVEL_XP[L])}</td><td>${L === 1 ? "—" : "+" + fmtNum(step)}</td><td>${perk(L)}</td><td>${unlock(L)}</td></tr>`;
+          <td>${L}</td><td>${fmtNum(curve[L])}</td><td>${L === 1 ? "—" : "+" + fmtNum(step)}</td><td>${perk(L)}</td><td>${unlock(L)}</td></tr>`;
       }
-      const next = cur < MAX_LEVEL ? `${fmtNum(LEVEL_XP[cur + 1] - xp)} XP to level ${cur + 1}` : "Max level reached!";
+      const next = cur < MAX_LEVEL ? `${fmtNum(curve[cur + 1] - xp)} XP to level ${cur + 1}` : "Max level reached!";
       showModal(`<h2>${gam ? "🎲 Gambler" : "📈 Investor"} levels</h2>
-        <p class="muted">${gam ? "Each casino round gives 1 XP (Classic), 2 XP (High rollers, Plinko, Sky Climb) or 4 XP (Super high rollers), at most one round every 15 seconds"
+        <p class="muted">${gam ? "XP = bcoin bet × game multiplier: Plinko, Sky Climb, Video Poker ×1 · Roulette ×2 · Blackjack ×4 · Ultimate Texas Hold'em ×5 · Super high roller tables ×2 more"
                                : "Every minute with money invested gives 4 XP, 8 XP from 1 scoin invested, 16 XP from 100 scoin"} ·
           You: level ${cur}, ${fmtNum(xp)} XP · ${next}</p>
         <div class="levelTableWrap"><table class="levelTable">
-          <thead><tr><th>Level</th><th>Total XP</th><th>This level</th><th>${gam ? "Cashback" : "ETF fee"}</th><th>Unlocks</th></tr></thead>
+          <thead><tr><th>Level</th><th>Total XP</th><th>This level</th><th>${gam ? "Cashback" : "Perks"}</th><th>Unlocks</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
         <button class="btn" onclick="hideModal()">Close</button>`);
       $("modalBox").classList.add("wide");

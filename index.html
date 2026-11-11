@@ -338,6 +338,8 @@
     #livePane .chartTip { font-size: 13px; }
     .maLegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; font-weight: 700; padding: 0 4px 4px; }
     .maBtns { display: inline-flex; gap: 4px; margin-right: 10px; }
+    .tfBtns { display: inline-flex; gap: 4px; margin-right: 10px; align-items: center; font-size: 13px; }
+    .tfBtns .btn.on { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
     .maBtns .btn { border-width: 2px; }
     .maBtns .btn.on { color: #1a1a2e; }
     .chartMode { display: inline-flex; gap: 4px; margin-right: 10px; }
@@ -1264,6 +1266,7 @@
             <div class="card" id="cryptoCard">
               <div class="row"><h3>📡 Live crypto market</h3>
                 <span><span class="chartMode"><button class="btn ghost small" data-cmode="line">📈 Line</button><button class="btn ghost small" data-cmode="candles">🕯️ Candles</button></span>
+        <span class="tfBtns" id="tfBtns"></span>
         <span class="maBtns" id="maBtns"></span>
         <span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
                 <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
@@ -6228,12 +6231,17 @@
     if (!inv.crypto) inv.crypto = {};
     for (const c of CRYPTOS) if (!inv.crypto[c.sym]) inv.crypto[c.sym] = { qty: 0, cost: 0, last: 0 };
     if (!inv.stats.crypto) inv.stats.crypto = { in: 0, out: 0 };
-    const live = {};   // sym -> { price, open, at, candles: [{ t, o, h, l, c, v }] }  (1-minute candles, v = volume in USD; not saved)
-    for (const c of CRYPTOS) live[c.sym] = { price: inv.crypto[c.sym].last || 0, open: 0, at: 0, candles: [] };
-    const CANDLE_MS = 60000, CANDLES_KEEP = 90;
-    // Adds or updates a 1-minute candle (Binance sends whole candles; for Coinbase we build them from trades)
-    function putCandle(sym, t, o, h, l, c, v, add) {
-      const list = live[sym].candles;
+    // Candle time frames: the line chart always uses 1 minute; candlesticks can use any of these
+    const TIMEFRAMES = [
+      { id: "1m", ms: 60000, label: "1 min", long: "1-minute" }, { id: "5m", ms: 300000, label: "5 min", long: "5-minute" },
+      { id: "15m", ms: 900000, label: "15 min", long: "15-minute" }, { id: "4h", ms: 14400000, label: "4 hours", long: "4-hour" },
+    ];
+    const live = {};   // sym -> { price, open, at, tf: { "1m": [{ t, o, h, l, c, v }], ... } }  (v = volume in USD; not saved)
+    for (const c of CRYPTOS) live[c.sym] = { price: inv.crypto[c.sym].last || 0, open: 0, at: 0, tf: Object.fromEntries(TIMEFRAMES.map(f => [f.id, []])) };
+    const CANDLES_KEEP = 90;
+    // Adds or updates a candle (Binance sends whole candles; for Coinbase we build them from trades)
+    function putCandle(sym, t, o, h, l, c, v, add, tf = "1m") {
+      const list = live[sym].tf[tf];
       let k = list.length && list[list.length - 1].t === t ? list[list.length - 1] : null;
       if (!k) {
         if (list.length && t < list[list.length - 1].t) return;
@@ -6270,14 +6278,14 @@
       let ws;
       try {
         if (source === "binance") {
-          const streams = CRYPTOS.flatMap(c => [c.binance.toLowerCase() + "@miniTicker", c.binance.toLowerCase() + "@kline_1m"]);
+          const streams = CRYPTOS.flatMap(c => [c.binance.toLowerCase() + "@miniTicker", ...TIMEFRAMES.map(f => c.binance.toLowerCase() + "@kline_" + f.id)]);
           ws = new WebSocket("wss://data-stream.binance.vision/stream?streams=" + streams.join("/"));
           ws.onmessage = (e) => {
             const d = (JSON.parse(e.data) || {}).data;
             const c = d && CRYPTOS.find(x => x.binance === d.s);
             if (!c) return;
             got = true; cryptoTries = 0;
-            if (d.e === "kline") { const k = d.k; putCandle(c.sym, k.t, +k.o, +k.h, +k.l, +k.c, +k.q, false); }
+            if (d.e === "kline") { const k = d.k; if (live[c.sym].tf[k.i]) putCandle(c.sym, k.t, +k.o, +k.h, +k.l, +k.c, +k.q, false, k.i); }
             else onPrice(c.sym, +d.c, +d.o);
           };
         } else {
@@ -6288,8 +6296,8 @@
             const c = d && d.type === "ticker" && CRYPTOS.find(x => x.coinbase === d.product_id);
             if (c) {
               got = true; cryptoTries = 0; onPrice(c.sym, +d.price, +d.open_24h);
-              const p = +d.price, t = Math.floor(Date.now() / CANDLE_MS) * CANDLE_MS;
-              putCandle(c.sym, t, p, p, p, p, p * (+d.last_size || 0), true);
+              const p = +d.price, now = Date.now();
+              for (const f of TIMEFRAMES) putCandle(c.sym, Math.floor(now / f.ms) * f.ms, p, p, p, p, p * (+d.last_size || 0), true, f.id);
             }
           };
         }
@@ -6306,16 +6314,17 @@
       ws.onerror = () => { try { ws.close(); } catch (e) {} };
       setTimeout(() => { if (!got && cryptoWs === ws) { try { ws.close(); } catch (e) {} } }, 8000);
     }
-    // Start the chart with the last hour of real 1-minute prices (if Binance's REST API is reachable)
+    // Start every chart with the last 90 real candles of each time frame (if Binance's REST API is reachable)
     async function seedCryptoHistory() {
-      for (const c of CRYPTOS) {
+      for (const c of CRYPTOS) for (const f of TIMEFRAMES) {
         try {
-          const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${c.binance}&interval=1m&limit=${CANDLES_KEEP}`);
+          const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${c.binance}&interval=${f.id}&limit=${CANDLES_KEEP}`);
           const rows = await r.json();
           if (Array.isArray(rows) && rows.length)
-            live[c.sym].candles = rows.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[7] })).slice(-CANDLES_KEEP);
+            live[c.sym].tf[f.id] = rows.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[7] })).slice(-CANDLES_KEEP);
         } catch (e) {}
       }
+      drawCryptoCharts();
     }
 
     function cryptoXp(amount) {
@@ -6368,7 +6377,7 @@
     }
     /* ----- Crypto chart: line or candlesticks, with volume bars underneath. Hover for details. ----- */
     const CC = { W: 800, H: 440, L: 8, R: 78, T: 14, PB: 326, VT: 342, VB: 428 };   // price area T..PB, volume area VT..VB
-    // Moving averages you can switch on (average close of the last N one-minute candles)
+    // Moving averages you can switch on (average close of the last N candles of the time frame shown)
     const MAS = [{ n: 5, color: "#ffd34d" }, { n: 10, color: "#4fc3f7" }, { n: 20, color: "#ba68c8" }, { n: 50, color: "#ff8a65" }];
     if (!Array.isArray(state.cryptoMA)) state.cryptoMA = [];
     function movingAvg(ks, n) {
@@ -6379,9 +6388,11 @@
     const shortVol = (v) => v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "k" : v.toFixed(0);
     function drawCryptoCharts() { for (const c of CRYPTOS) drawCryptoChart(c.sym); }
     function drawCryptoChart(sym) {
-      const box = $("cchart-" + sym), ks = live[sym].candles;
-      if (!box || ks.length < 2) return;
       const mode = state.cryptoChart === "candles" ? "candles" : "line";
+      const tf = TIMEFRAMES.find(f => f.id === (mode === "candles" ? state.cryptoTf : "1m")) || TIMEFRAMES[0];
+      const box = $("cchart-" + sym), ks = live[sym].tf[tf.id];
+      if (!box) return;
+      if (ks.length < 2) { box.innerHTML = `<div class="muted" style="padding:24px; text-align:center">📈 Waiting for ${tf.long} candles…</div>`; return; }
       let lo = Math.min(...ks.map(k => k.l)), hi = Math.max(...ks.map(k => k.h));
       if (hi - lo < hi * 1e-5) { lo -= hi * 1e-4; hi += hi * 1e-4; }
       const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
@@ -6428,7 +6439,8 @@
       }
       body += `<line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${Y(last)}" y2="${Y(last)}" stroke="${lineCol}" stroke-opacity="0.5" stroke-dasharray="4 4"/>`;
       const chg = (last / first - 1) * 100;
-      box.innerHTML = `<div class="chartHead"><span>${mode === "candles" ? "Candlesticks" : "Line"} · 1-minute · last ${n} min · volume in bcoin</span>
+      const span = n * tf.ms / 60000, spanText = span >= 2880 ? Math.round(span / 1440) + " days" : span >= 120 ? Math.round(span / 60) + " h" : span + " min";
+      box.innerHTML = `<div class="chartHead"><span>${mode === "candles" ? "Candlesticks" : "Line"} · ${tf.long} · last ${spanText} · volume in bcoin</span>
           <span style="color:${lineCol}; font-weight:700">${priceText(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%)</span></div>
         ${maNow.length ? `<div class="maLegend">${maNow.join("")}</div>` : ""}
         <svg class="cryptoSvg" viewBox="0 0 ${CC.W} ${CC.H}" preserveAspectRatio="none">${g}${vol}${body}
@@ -6440,7 +6452,8 @@
         const i = Math.max(0, Math.min(n - 1, Math.floor(((e.clientX - r.left) / r.width * CC.W - CC.L) / step)));
         const k = ks[i];
         xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.setAttribute("visibility", "visible");
-        const time = new Date(k.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const time = tf.ms >= 14400000 ? new Date(k.t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                                       : new Date(k.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         tip.hidden = false;
         const maTip = MAS.filter(m => state.cryptoMA.includes(m.n)).map(m => { const v = movingAvg(ks, m.n)[i]; return v === null ? "" : `<br><span style="color:${m.color}">MA${m.n} ${priceText(v)}</span>`; }).join("");
         tip.innerHTML = `<b>${time}</b><br>O ${priceText(k.o)} · H ${priceText(k.h)}<br>L ${priceText(k.l)} · C ${priceText(k.c)}<br>Vol ${shortVol(k.v)}${maTip}`;
@@ -6523,9 +6536,20 @@
       document.querySelectorAll("[data-isub]").forEach(b => b.classList.toggle("active", b.dataset.isub === state.investPage));
       if (state.investPage === "live") { renderCryptoNumbers(); drawCryptoCharts(); }
     }
+    if (!TIMEFRAMES.some(f => f.id === state.cryptoTf)) state.cryptoTf = "1m";
     function updateChartModeButtons() {
       document.querySelectorAll("[data-cmode]").forEach(b => b.classList.toggle("on", (state.cryptoChart || "line") === b.dataset.cmode));
+      // candle time frames only show in the candlestick view
+      $("tfBtns").innerHTML = state.cryptoChart === "candles"
+        ? `<span class="muted">Time frame:</span>` + TIMEFRAMES.map(f => `<button class="btn ghost small ${state.cryptoTf === f.id ? "on" : ""}" data-tf="${f.id}">${f.label}</button>`).join("")
+        : "";
     }
+    $("tfBtns").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-tf]");
+      if (!b) return;
+      state.cryptoTf = b.dataset.tf;
+      updateChartModeButtons(); drawCryptoCharts(); save();
+    });
     document.querySelector(".chartMode").addEventListener("click", (e) => {
       const b = e.target.closest("[data-cmode]");
       if (!b) return;

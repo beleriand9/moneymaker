@@ -93,6 +93,11 @@
     #coin.wowCoin::after { content: none; }
     #coin.royalCoin { background: url("assets/royal-coin.webp") center / contain no-repeat; box-shadow: none; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
     #coin.royalCoin::after { content: none; }
+    body.rainBg {
+      background: linear-gradient(rgba(12, 12, 22, 0.76), rgba(12, 12, 22, 0.86)), url("assets/rain-background.jpg") center / cover fixed;
+    }
+    #coin.rainCoin { background: url("assets/rain-coin.webp") center / contain no-repeat; box-shadow: none; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
+    #coin.rainCoin::after { content: none; }
 
     #shop {
       width: 420px;
@@ -5862,6 +5867,7 @@
     const COLLECTIONS = [
       { id: "wow",   name: "🐕 Wow So Rich Collection" },
       { id: "royal", name: "👑 Royal Collection" },
+      { id: "rain",  name: "🐸 Make It Rain Collection" },
     ];
     const COSMETICS = [
       { id: "wowBg",   collection: "wow", slot: "background", name: "Wow So Rich Background", price: 5000000, desc: "A very rich dog in a very rich office, behind the whole game.",
@@ -5872,6 +5878,10 @@
         preview: `<div class="preview" style="background-image:url('assets/royal-background-thumb.jpg')"></div>` },
       { id: "royalCoin", collection: "royal", slot: "coin", name: "Royal Coin", price: 25000000, desc: "Replaces the coin you click with His Majesty's golden coin.",
         preview: `<div class="preview"><img src="assets/royal-coin.webp" alt="Royal coin"></div>` },
+      { id: "rainBg", collection: "rain", slot: "background", name: "Make It Rain Background", price: 100000000, desc: "The frog wizard casts his golden coin spell behind the whole game.",
+        preview: `<div class="preview" style="background-image:url('assets/rain-background-thumb.jpg')"></div>` },
+      { id: "rainCoin", collection: "rain", slot: "coin", name: "Make It Rain Coin", price: 100000000, desc: "Replaces the coin you click with the frog wizard's golden coin.",
+        preview: `<div class="preview"><img src="assets/rain-coin.webp" alt="Make It Rain coin"></div>` },
     ];
     if (!state.cosmetics) state.cosmetics = { owned: {}, on: {} };
 
@@ -5885,8 +5895,10 @@
     function applyCosmetics() {
       document.body.classList.toggle("wowBg", !!state.cosmetics.on.wowBg);
       document.body.classList.toggle("royalBg", !!state.cosmetics.on.royalBg);
+      document.body.classList.toggle("rainBg", !!state.cosmetics.on.rainBg);
       $("coin").classList.toggle("wowCoin", !!state.cosmetics.on.wowCoin);
       $("coin").classList.toggle("royalCoin", !!state.cosmetics.on.royalCoin);
+      $("coin").classList.toggle("rainCoin", !!state.cosmetics.on.rainCoin);
     }
 
     function renderCosmetics() {

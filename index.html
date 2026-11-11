@@ -333,7 +333,13 @@
     .cryptoName { display: flex; align-items: center; gap: 10px; min-width: 130px; }
     .cryptoIcon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
                   font-size: 22px; font-weight: 900; background: linear-gradient(160deg, #ffb300, #f57c00); color: #fff; }
-    .cryptoSvg { display: block; width: 100%; height: 320px; }
+    .chartBox svg.cryptoSvg { display: block; width: 100%; height: 440px; }
+    #livePane .chartHead { font-size: 14px; }
+    #livePane .chartTip { font-size: 13px; }
+    .maLegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; font-weight: 700; padding: 0 4px 4px; }
+    .maBtns { display: inline-flex; gap: 4px; margin-right: 10px; }
+    .maBtns .btn { border-width: 2px; }
+    .maBtns .btn.on { color: #1a1a2e; }
     .chartMode { display: inline-flex; gap: 4px; margin-right: 10px; }
     .chartMode .btn.on { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
     .cryptoStatus { font-size: 13px; font-weight: 800; color: #ffb347; margin-right: 8px; }
@@ -1258,6 +1264,7 @@
             <div class="card" id="cryptoCard">
               <div class="row"><h3>📡 Live crypto market</h3>
                 <span><span class="chartMode"><button class="btn ghost small" data-cmode="line">📈 Line</button><button class="btn ghost small" data-cmode="candles">🕯️ Candles</button></span>
+        <span class="maBtns" id="maBtns"></span>
         <span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
                 <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
               <div class="muted infoBox" id="info-crypto" hidden>Trade <b>Bitcoin, Ethereum and Solana at their real, live prices</b> (1 US dollar = 1 bcoin),
@@ -6360,7 +6367,15 @@
       updateCounter(); updateInvestLive(); save(); renderCryptoNumbers();
     }
     /* ----- Crypto chart: line or candlesticks, with volume bars underneath. Hover for details. ----- */
-    const CC = { W: 800, H: 320, L: 8, R: 70, T: 12, PB: 228, VT: 240, VB: 302 };   // price area T..PB, volume area VT..VB
+    const CC = { W: 800, H: 440, L: 8, R: 78, T: 14, PB: 326, VT: 342, VB: 428 };   // price area T..PB, volume area VT..VB
+    // Moving averages you can switch on (average close of the last N one-minute candles)
+    const MAS = [{ n: 5, color: "#ffd34d" }, { n: 10, color: "#4fc3f7" }, { n: 20, color: "#ba68c8" }, { n: 50, color: "#ff8a65" }];
+    if (!Array.isArray(state.cryptoMA)) state.cryptoMA = [];
+    function movingAvg(ks, n) {
+      const out = []; let sum = 0;
+      ks.forEach((k, i) => { sum += k.c; if (i >= n) sum -= ks[i - n].c; out.push(i >= n - 1 ? sum / n : null); });
+      return out;
+    }
     const shortVol = (v) => v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "k" : v.toFixed(0);
     function drawCryptoCharts() { for (const c of CRYPTOS) drawCryptoChart(c.sym); }
     function drawCryptoChart(sym) {
@@ -6380,10 +6395,10 @@
       for (let i = 0; i <= 4; i++) {
         const p = lo + (hi - lo) * i / 4;
         g += `<line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${Y(p)}" y2="${Y(p)}" stroke="#fff" stroke-opacity="0.07"/>
-              <text x="${CC.W - CC.R + 6}" y="${Y(p) + 4}" fill="#8d8da3" font-size="11">${p.toLocaleString(undefined, { maximumFractionDigits: dec })}</text>`;
+              <text x="${CC.W - CC.R + 6}" y="${Y(p) + 5}" fill="#a5a5bd" font-size="13">${p.toLocaleString(undefined, { maximumFractionDigits: dec })}</text>`;
       }
-      g += `<text x="${CC.W - CC.R + 6}" y="${CC.VT + 10}" fill="#8d8da3" font-size="10">Vol</text>
-            <text x="${CC.W - CC.R + 6}" y="${CC.VT + 24}" fill="#8d8da3" font-size="10">${shortVol(vmax)}</text>
+      g += `<text x="${CC.W - CC.R + 6}" y="${CC.VT + 14}" fill="#a5a5bd" font-size="12">Vol</text>
+            <text x="${CC.W - CC.R + 6}" y="${CC.VT + 30}" fill="#a5a5bd" font-size="12">${shortVol(vmax)}</text>
             <line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${CC.VB}" y2="${CC.VB}" stroke="#fff" stroke-opacity="0.12"/>`;
       let vol = "", body = "";
       ks.forEach((k, i) => {
@@ -6401,10 +6416,21 @@
         body = `<polygon points="${X(0)},${CC.PB} ${pts} ${X(n - 1)},${CC.PB}" fill="${lineCol}" opacity="0.12"/>
                 <polyline points="${pts}" fill="none" stroke="${lineCol}" stroke-width="2"/>`;
       }
+      // moving averages
+      const maNow = [];
+      for (const m of MAS) {
+        if (!state.cryptoMA.includes(m.n)) continue;
+        const vals = movingAvg(ks, m.n);
+        const pts = vals.map((v, i) => v === null ? null : `${X(i)},${Y(v)}`).filter(Boolean);
+        if (pts.length > 1) body += `<polyline points="${pts.join(" ")}" fill="none" stroke="${m.color}" stroke-width="1.8" opacity="0.95"/>`;
+        const lastV = vals[vals.length - 1];
+        maNow.push(`<span style="color:${m.color}">MA${m.n} ${lastV === null ? `(needs ${m.n} min)` : priceText(lastV)}</span>`);
+      }
       body += `<line x1="${CC.L}" x2="${CC.W - CC.R}" y1="${Y(last)}" y2="${Y(last)}" stroke="${lineCol}" stroke-opacity="0.5" stroke-dasharray="4 4"/>`;
       const chg = (last / first - 1) * 100;
       box.innerHTML = `<div class="chartHead"><span>${mode === "candles" ? "Candlesticks" : "Line"} · 1-minute · last ${n} min · volume in bcoin</span>
           <span style="color:${lineCol}; font-weight:700">${priceText(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%)</span></div>
+        ${maNow.length ? `<div class="maLegend">${maNow.join("")}</div>` : ""}
         <svg class="cryptoSvg" viewBox="0 0 ${CC.W} ${CC.H}" preserveAspectRatio="none">${g}${vol}${body}
           <line class="xh" x1="0" x2="0" y1="${CC.T}" y2="${CC.VB}" stroke="#fff" stroke-opacity="0.35" visibility="hidden"/></svg>
         <div class="chartTip" hidden></div>`;
@@ -6416,7 +6442,8 @@
         xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.setAttribute("visibility", "visible");
         const time = new Date(k.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         tip.hidden = false;
-        tip.innerHTML = `<b>${time}</b><br>O ${priceText(k.o)} · H ${priceText(k.h)}<br>L ${priceText(k.l)} · C ${priceText(k.c)}<br>Vol ${shortVol(k.v)}`;
+        const maTip = MAS.filter(m => state.cryptoMA.includes(m.n)).map(m => { const v = movingAvg(ks, m.n)[i]; return v === null ? "" : `<br><span style="color:${m.color}">MA${m.n} ${priceText(v)}</span>`; }).join("");
+        tip.innerHTML = `<b>${time}</b><br>O ${priceText(k.o)} · H ${priceText(k.h)}<br>L ${priceText(k.l)} · C ${priceText(k.c)}<br>Vol ${shortVol(k.v)}${maTip}`;
         tip.style.left = Math.min(r.width - 170, Math.max(0, X(i) / CC.W * r.width - 80)) + "px";
       };
       svg.onmouseleave = () => { tip.hidden = true; xh.setAttribute("visibility", "hidden"); };
@@ -6506,6 +6533,22 @@
       updateChartModeButtons(); drawCryptoCharts(); save();
     });
     updateChartModeButtons();
+    // Moving average buttons: switch any combination on or off (remembered)
+    function updateMaButtons() {
+      $("maBtns").innerHTML = MAS.map(m => {
+        const on = state.cryptoMA.includes(m.n);
+        return `<button class="btn ghost small ${on ? "on" : ""}" data-ma="${m.n}" title="${m.n}-minute moving average"
+          style="border-color:${m.color}; ${on ? `background:${m.color};` : `color:${m.color};`}">MA${m.n}</button>`;
+      }).join("");
+    }
+    $("maBtns").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-ma]");
+      if (!b) return;
+      const n = Number(b.dataset.ma);
+      state.cryptoMA = state.cryptoMA.includes(n) ? state.cryptoMA.filter(x => x !== n) : [...state.cryptoMA, n];
+      updateMaButtons(); drawCryptoCharts(); save();
+    });
+    updateMaButtons();
     document.querySelector(".subNav").addEventListener("click", (e) => {
       const b = e.target.closest("[data-isub]");
       if (b) { showInvestPage(b.dataset.isub); save(); }

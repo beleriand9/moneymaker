@@ -98,6 +98,11 @@
     }
     #coin.rainCoin { background: url("assets/rain-coin.webp") center / contain no-repeat; box-shadow: none; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
     #coin.rainCoin::after { content: none; }
+    body.aheadBg {
+      background: linear-gradient(rgba(12, 12, 22, 0.76), rgba(12, 12, 22, 0.86)), url("assets/ahead-background.jpg") center / cover fixed;
+    }
+    #coin.aheadCoin { background: url("assets/ahead-coin.webp") center / contain no-repeat; box-shadow: none; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
+    #coin.aheadCoin::after { content: none; }
 
     #shop {
       width: 420px;
@@ -5938,6 +5943,7 @@
     // slot: items in the same slot replace each other (only one background at a time)
     const COLLECTIONS = [
       { id: "wow",   name: "🐕 Wow So Rich Collection" },
+      { id: "ahead", name: "♟️ One Step Ahead Collection" },
       { id: "royal", name: "👑 Royal Collection" },
       { id: "rain",  name: "🐸 Make It Rain Collection" },
     ];
@@ -5946,6 +5952,10 @@
         preview: `<div class="preview" style="background-image:url('assets/wow-background-thumb.jpg')"></div>` },
       { id: "wowCoin", collection: "wow", slot: "coin", name: "Wow So Rich Coin", price: 5000000, desc: "Replaces the golden coin you click with the Wow So Rich coin.",
         preview: `<div class="preview"><img src="assets/wow-coin.webp" alt="Wow So Rich coin"></div>` },
+      { id: "aheadBg", collection: "ahead", slot: "background", name: "One Step Ahead Background", price: 15000000, desc: "A gentleman chimpanzee plans his next move, behind the whole game.",
+        preview: `<div class="preview" style="background-image:url('assets/ahead-background-thumb.jpg')"></div>` },
+      { id: "aheadCoin", collection: "ahead", slot: "coin", name: "One Step Ahead Coin", price: 15000000, desc: "Replaces the coin you click with the gentleman chimpanzee's gold medallion.",
+        preview: `<div class="preview"><img src="assets/ahead-coin.webp" alt="One Step Ahead coin"></div>` },
       { id: "royalBg", collection: "royal", slot: "background", name: "Royal Background", price: 25000000, desc: "His Majesty the Cat, glowing over the whole game.",
         preview: `<div class="preview" style="background-image:url('assets/royal-background-thumb.jpg')"></div>` },
       { id: "royalCoin", collection: "royal", slot: "coin", name: "Royal Coin", price: 25000000, desc: "Replaces the coin you click with His Majesty's golden coin.",
@@ -5968,9 +5978,11 @@
       document.body.classList.toggle("wowBg", !!state.cosmetics.on.wowBg);
       document.body.classList.toggle("royalBg", !!state.cosmetics.on.royalBg);
       document.body.classList.toggle("rainBg", !!state.cosmetics.on.rainBg);
+      document.body.classList.toggle("aheadBg", !!state.cosmetics.on.aheadBg);
       $("coin").classList.toggle("wowCoin", !!state.cosmetics.on.wowCoin);
       $("coin").classList.toggle("royalCoin", !!state.cosmetics.on.royalCoin);
       $("coin").classList.toggle("rainCoin", !!state.cosmetics.on.rainCoin);
+      $("coin").classList.toggle("aheadCoin", !!state.cosmetics.on.aheadCoin);
     }
 
     function renderCosmetics() {

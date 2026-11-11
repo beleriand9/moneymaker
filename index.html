@@ -337,13 +337,17 @@
     #livePane .chartHead { font-size: 14px; }
     #livePane .chartTip { font-size: 13px; }
     .maLegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; font-weight: 700; padding: 0 4px 4px; }
-    .maBtns { display: inline-flex; gap: 4px; margin-right: 10px; }
-    .tfBtns { display: inline-flex; gap: 4px; margin-right: 10px; align-items: center; font-size: 13px; }
-    .tfBtns .btn.on { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
-    .maBtns .btn { border-width: 2px; }
-    .maBtns .btn.on { color: #1a1a2e; }
-    .chartMode { display: inline-flex; gap: 4px; margin-right: 10px; }
-    .chartMode .btn.on { background: #ffd34d; color: #2b2200; border-color: #ffd34d; }
+    .chartTools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .segGroup { display: inline-flex; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; overflow: hidden; }
+    .seg { background: #1b1c28; color: #c9c9da; border: none; border-right: 1px solid rgba(255,255,255,0.1);
+           padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+    .seg:last-child { border-right: none; }
+    .seg:hover { background: #262838; }
+    .seg.on { background: #ffd34d; color: #2b2200; }
+    .seg.ma { color: var(--ma); }
+    .seg.ma.on { background: var(--ma); color: #15161f; }
+    .maGroup { margin-left: auto; }
+    .chartTools + .chartBox { margin-top: 6px; }
     .cryptoStatus { font-size: 13px; font-weight: 800; color: #ffb347; margin-right: 8px; }
     .cryptoStatus.on { color: #5be08f; }
     .levelTableWrap { max-height: 55vh; overflow-y: auto; margin: 12px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
@@ -1265,9 +1269,7 @@
             <!-- Live crypto market (real prices from Binance, or Coinbase as a backup) -->
             <div class="card" id="cryptoCard">
               <div class="row"><h3>📡 Live crypto market</h3>
-                <span><span class="chartMode"><button class="btn ghost small" data-cmode="line">📈 Line</button><button class="btn ghost small" data-cmode="candles">🕯️ Candles</button></span>
-        <span class="tfBtns" id="tfBtns"></span>
-        <span class="maBtns" id="maBtns"></span>
+                <span>
         <span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
                 <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
               <div class="muted infoBox" id="info-crypto" hidden>Trade <b>Bitcoin, Ethereum and Solana at their real, live prices</b> (1 US dollar = 1 bcoin),
@@ -6474,6 +6476,7 @@
             <div><div class="muted">Worth</div><div class="bigValue" id="cval-${c.sym}">0</div></div>
             <div><div class="muted">Profit / loss</div><div class="bigValue" id="cpl-${c.sym}">–</div></div>
           </div>
+          <div class="chartTools" data-ctools="${c.sym}"></div>
           <div class="chartBox" id="cchart-${c.sym}"><div class="muted" style="padding:24px; text-align:center">📈 The chart appears as live prices come in…</div></div>
           <div class="moneyRow">
             <input id="cbuy-${c.sym}" type="number" min="${CRYPTO_MIN}" placeholder="Amount (min 1,000)">
@@ -6487,6 +6490,7 @@
           </div>
           <div id="cmsg-${c.sym}" class="muted"></div>
         </div>`).join("");
+      if (typeof updateChartTools === "function") updateChartTools();
       renderCryptoNumbers();
     }
     function renderCryptoNumbers() {
@@ -6537,42 +6541,31 @@
       if (state.investPage === "live") { renderCryptoNumbers(); drawCryptoCharts(); }
     }
     if (!TIMEFRAMES.some(f => f.id === state.cryptoTf)) state.cryptoTf = "1m";
-    function updateChartModeButtons() {
-      document.querySelectorAll("[data-cmode]").forEach(b => b.classList.toggle("on", (state.cryptoChart || "line") === b.dataset.cmode));
-      // candle time frames only show in the candlestick view
-      $("tfBtns").innerHTML = state.cryptoChart === "candles"
-        ? `<span class="muted">Time frame:</span>` + TIMEFRAMES.map(f => `<button class="btn ghost small ${state.cryptoTf === f.id ? "on" : ""}" data-tf="${f.id}">${f.label}</button>`).join("")
-        : "";
+    // Chart toolbar above every chart (all three stay in sync): Line/Candles · time frame (candles only) · moving averages
+    function chartToolsHtml() {
+      const mode = state.cryptoChart === "candles" ? "candles" : "line";
+      const seg = (attr, val, label, on) => `<button class="seg ${on ? "on" : ""}" data-${attr}="${val}">${label}</button>`;
+      return `<div class="segGroup">${seg("cmode", "line", "📈 Line", mode === "line")}${seg("cmode", "candles", "🕯️ Candles", mode === "candles")}</div>` +
+        (mode === "candles" ? `<div class="segGroup">${TIMEFRAMES.map(f => seg("tf", f.id, f.id, state.cryptoTf === f.id)).join("")}</div>` : "") +
+        `<div class="segGroup maGroup">${MAS.map(m => {
+          const on = state.cryptoMA.includes(m.n);
+          return `<button class="seg ma ${on ? "on" : ""}" data-ma="${m.n}" title="${m.n}-candle moving average"
+            style="--ma:${m.color}">MA${m.n}</button>`;
+        }).join("")}</div>`;
     }
-    $("tfBtns").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-tf]");
-      if (!b) return;
-      state.cryptoTf = b.dataset.tf;
-      updateChartModeButtons(); drawCryptoCharts(); save();
-    });
-    document.querySelector(".chartMode").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-cmode]");
-      if (!b) return;
-      state.cryptoChart = b.dataset.cmode;
-      updateChartModeButtons(); drawCryptoCharts(); save();
-    });
-    updateChartModeButtons();
-    // Moving average buttons: switch any combination on or off (remembered)
-    function updateMaButtons() {
-      $("maBtns").innerHTML = MAS.map(m => {
-        const on = state.cryptoMA.includes(m.n);
-        return `<button class="btn ghost small ${on ? "on" : ""}" data-ma="${m.n}" title="${m.n}-minute moving average"
-          style="border-color:${m.color}; ${on ? `background:${m.color};` : `color:${m.color};`}">MA${m.n}</button>`;
-      }).join("");
+    function updateChartTools() {
+      const html = chartToolsHtml();
+      document.querySelectorAll("[data-ctools]").forEach(el => el.innerHTML = html);
     }
-    $("maBtns").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-ma]");
-      if (!b) return;
-      const n = Number(b.dataset.ma);
-      state.cryptoMA = state.cryptoMA.includes(n) ? state.cryptoMA.filter(x => x !== n) : [...state.cryptoMA, n];
-      updateMaButtons(); drawCryptoCharts(); save();
+    $("cryptoList").addEventListener("click", (e) => {
+      const m = e.target.closest("[data-cmode]"), t = e.target.closest("[data-tf]"), a = e.target.closest("[data-ma]");
+      if (!m && !t && !a) return;
+      if (m) state.cryptoChart = m.dataset.cmode;
+      if (t) state.cryptoTf = t.dataset.tf;
+      if (a) { const n = Number(a.dataset.ma); state.cryptoMA = state.cryptoMA.includes(n) ? state.cryptoMA.filter(x => x !== n) : [...state.cryptoMA, n]; }
+      updateChartTools(); drawCryptoCharts(); save();
     });
-    updateMaButtons();
+    updateChartTools();
     document.querySelector(".subNav").addEventListener("click", (e) => {
       const b = e.target.closest("[data-isub]");
       if (b) { showInvestPage(b.dataset.isub); save(); }

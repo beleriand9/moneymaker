@@ -316,6 +316,12 @@
     .chip.free { position: relative; box-shadow: 0 0 0 3px #b388ff; }
     .chip.free i { position: absolute; bottom: -6px; right: -8px; font-style: normal; font-size: 10px; background: #b388ff; color: #1a1030; border-radius: 999px; padding: 0 4px; }
     .freeRow { margin-top: 0; }
+    .cryptoRow { padding: 12px 0; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 10px; }
+    .cryptoName { display: flex; align-items: center; gap: 10px; min-width: 130px; }
+    .cryptoIcon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                  font-size: 22px; font-weight: 900; background: linear-gradient(160deg, #ffb300, #f57c00); color: #fff; }
+    .cryptoStatus { font-size: 13px; font-weight: 800; color: #ffb347; margin-right: 8px; }
+    .cryptoStatus.on { color: #5be08f; }
     .levelTableWrap { max-height: 55vh; overflow-y: auto; margin: 12px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
     .levelTable { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
     .levelTable th { position: sticky; top: 0; background: #23253a; padding: 6px 10px; }
@@ -1221,6 +1227,19 @@
           <span class="muted">One slot: cash out to invest again.</span>
         </div>
       </div>
+    </div>
+    <!-- Live crypto market (real prices from Binance, or Coinbase as a backup) -->
+    <div class="card" id="cryptoCard">
+      <div class="row"><h3>📡 Live crypto market</h3>
+        <span><span id="cryptoStatus" class="cryptoStatus">● Connecting…</span>
+        <button class="btn ghost small" data-info="crypto">ℹ️ Info</button></span></div>
+      <div class="muted infoBox" id="info-crypto" hidden>Trade <b>Bitcoin, Ethereum and Solana at their real, live prices</b> (1 US dollar = 1 bcoin),
+        streamed every second from Binance (or Coinbase if Binance isn't reachable). Prices move with the real market, 24/7, up or down.
+        <br><br><b>Fee:</b> 2% on every buy and sell, 0.1% less for every 10 Investor levels (level 10, 20, 30…). At Investor level 99 trading is free.
+        <br><b>XP:</b> every trade gives Investor XP based on its size (1,000 → 1 XP, 1 scoin → 4 XP, 1 gcoin → 10 XP), at most once a minute.
+        Coins you hold also count as invested money for the per-minute Investor XP. Min. trade 1,000. Trading pauses if the live prices stop.</div>
+      <div class="muted" id="cryptoFeeText" style="margin-top:6px"></div>
+      <div id="cryptoList"></div>
     </div>
   </section>
 
@@ -3294,7 +3313,7 @@
       return { min, max, x, y };
     }
 
-    function drawChart(id, prices) {
+    function drawChart(id, prices, label) {
       const box = $(id);
       if (!box) return;
       const { min, max, x, y } = chartGeometry(prices);
@@ -3315,7 +3334,7 @@
       }
       const gradId = id + "Grad";
       box.innerHTML = `
-        <div class="chartHead"><span>Price · last ${Math.round((prices.length - 1) * ETF_EVERY / 60)} min</span>
+        <div class="chartHead"><span>${label || `Price · last ${Math.round((prices.length - 1) * ETF_EVERY / 60)} min`}</span>
           <span style="color:${color}; font-weight:700">${last.toFixed(2)} (${change >= 0 ? "+" : ""}${change.toFixed(2)}%)</span></div>
         <svg viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none" role="img" aria-label="ETF price chart">
           <defs><linearGradient id="${gradId}" x1="0" x2="0" y1="0" y2="1">
@@ -3381,7 +3400,7 @@
 
     /* ----- Runs every second from the game loop. Returns rent paid (taxable). ----- */
     // Investor XP: every minute with money invested (4 XP; 8 XP from 1 scoin; 16 XP from 100 scoin)
-    function investedTotal() { return ["re", "etf", "gold", "petf"].reduce((a, k) => a + investCurrent(k), 0); }
+    function investedTotal() { return ["re", "etf", "gold", "petf", "crypto"].reduce((a, k) => a + investCurrent(k), 0); }
     function investXpPerMinute() {
       const v = investedTotal();
       return v >= 100 * SCOIN ? 16 : v >= SCOIN ? 8 : v >= 1000 ? 4 : 0;
@@ -3467,6 +3486,7 @@
        profit = everything you got back (sales, cash-outs after fees, rent) + what it is worth now - everything you put in */
     function investCurrent(key) {
       if (key === "re") return inv.properties.reduce((a, p) => a + p.value, 0);
+      if (key === "crypto") return cryptoReady ? cryptoTotal() : 0;
       return inv[key] || 0;
     }
     if (!inv.stats) {
@@ -3479,11 +3499,13 @@
       inv.stats[key].out += moneyOut;
     }
     function updateInvestAllTime() {
-      const parts = [["re", "🏠 Real estate"], ["etf", "📊 ETF"], ["gold", "🪙 Gold"], ["petf", "🏦 Broker ETF"]];
+      const parts = [["re", "🏠 Real estate"], ["etf", "📊 ETF"], ["gold", "🪙 Gold"], ["petf", "🏦 Broker ETF"], ["crypto", "📡 Crypto"]];
       let total = 0, html = "";
       for (const [k, label] of parts) {
         const st = inv.stats[k];
+        if (!st) continue;
         if (k === "petf" && st.in === 0 && !hasBroker()) continue;   // hide until you have a Brokerage Firm
+        if (k === "crypto" && st.in === 0) continue;                 // hide until your first crypto trade
         const profit = st.out + investCurrent(k) - st.in;
         total += profit;
         const cls = profit > 0.5 ? "up" : profit < -0.5 ? "down" : "";
@@ -6153,6 +6175,212 @@
     $("tankers").addEventListener("click", fleetClick);
     $("trucks").addEventListener("click", fleetClick);
     $("planes").addEventListener("click", fleetClick);
+
+    /* =====================================================================
+       📡 LIVE CRYPTO MARKET: real prices (1 USD = 1 bcoin) for Bitcoin, Ethereum and Solana.
+       Data: Binance public market stream (no API key needed); Coinbase public feed as a backup.
+       Fee per trade: 2%, −0.1% every 10 Investor levels, free at level 99.
+       Investor XP per trade: log10(amount) − 2 (1,000 → 1 XP ... 1 gcoin → 10 XP), at most once a minute.
+       ===================================================================== */
+    const CRYPTOS = [
+      { sym: "BTC", name: "Bitcoin",  icon: "₿", binance: "BTCUSDT", coinbase: "BTC-USD" },
+      { sym: "ETH", name: "Ethereum", icon: "Ξ", binance: "ETHUSDT", coinbase: "ETH-USD" },
+      { sym: "SOL", name: "Solana",   icon: "◎", binance: "SOLUSDT", coinbase: "SOL-USD" },
+    ];
+    const CRYPTO_MIN = 1000, CRYPTO_XP_GAP = 60000, CRYPTO_STALE = 30000;
+    if (!inv.crypto) inv.crypto = {};
+    for (const c of CRYPTOS) if (!inv.crypto[c.sym]) inv.crypto[c.sym] = { qty: 0, cost: 0, last: 0 };
+    if (!inv.stats.crypto) inv.stats.crypto = { in: 0, out: 0 };
+    const live = {};   // sym -> { price, open, at, hist: [] }  (not saved)
+    for (const c of CRYPTOS) live[c.sym] = { price: inv.crypto[c.sym].last || 0, open: 0, at: 0, hist: [] };
+    let cryptoSource = "", cryptoWs = null, cryptoTries = 0;
+
+    function cryptoFee() {
+      const L = investLevel();
+      return L >= 99 ? 0 : Math.max(0, 0.02 - 0.001 * Math.floor(L / 10));
+    }
+    const cryptoLive = (sym) => live[sym].price > 0 && Date.now() - live[sym].at < CRYPTO_STALE;
+    const cryptoPrice = (sym) => live[sym].price || inv.crypto[sym].last || 0;
+    const cryptoValue = (sym) => inv.crypto[sym].qty * cryptoPrice(sym);
+    function cryptoTotal() { return CRYPTOS.reduce((a, c) => a + cryptoValue(c.sym), 0); }
+
+    function onPrice(sym, price, open) {
+      if (!(price > 0)) return;
+      const L = live[sym];
+      L.price = price; L.at = Date.now();
+      if (open > 0) L.open = open;
+      inv.crypto[sym].last = price;
+    }
+    // Binance first; if it doesn't deliver within 8 seconds (blocked or down), Coinbase
+    function connectCrypto(source = "binance") {
+      try { if (cryptoWs) cryptoWs.close(); } catch (e) {}
+      cryptoSource = source;
+      let got = false;
+      let ws;
+      try {
+        if (source === "binance") {
+          ws = new WebSocket("wss://data-stream.binance.vision/stream?streams=" + CRYPTOS.map(c => c.binance.toLowerCase() + "@miniTicker").join("/"));
+          ws.onmessage = (e) => {
+            const d = (JSON.parse(e.data) || {}).data;
+            const c = d && CRYPTOS.find(x => x.binance === d.s);
+            if (c) { got = true; cryptoTries = 0; onPrice(c.sym, +d.c, +d.o); }
+          };
+        } else {
+          ws = new WebSocket("wss://ws-feed.exchange.coinbase.com");
+          ws.onopen = () => ws.send(JSON.stringify({ type: "subscribe", product_ids: CRYPTOS.map(c => c.coinbase), channels: ["ticker"] }));
+          ws.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+            const c = d && d.type === "ticker" && CRYPTOS.find(x => x.coinbase === d.product_id);
+            if (c) { got = true; cryptoTries = 0; onPrice(c.sym, +d.price, +d.open_24h); }
+          };
+        }
+      } catch (e) { ws = null; }
+      cryptoWs = ws;
+      const retry = () => {
+        if (cryptoWs !== ws) return;
+        cryptoTries++;
+        // switch source when one doesn't work; wait longer after repeated failures
+        setTimeout(() => connectCrypto(got ? source : (source === "binance" ? "coinbase" : "binance")), Math.min(30000, 2000 * cryptoTries));
+      };
+      if (!ws) return retry();
+      ws.onclose = retry;
+      ws.onerror = () => { try { ws.close(); } catch (e) {} };
+      setTimeout(() => { if (!got && cryptoWs === ws) { try { ws.close(); } catch (e) {} } }, 8000);
+    }
+    // Start the chart with the last hour of real 1-minute prices (if Binance's REST API is reachable)
+    async function seedCryptoHistory() {
+      for (const c of CRYPTOS) {
+        try {
+          const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${c.binance}&interval=1m&limit=60`);
+          const rows = await r.json();
+          if (Array.isArray(rows) && rows.length) live[c.sym].hist = rows.map(k => +k[4]);
+        } catch (e) {}
+      }
+    }
+
+    function cryptoXp(amount) {
+      if (Date.now() - (inv.cryptoXpAt || 0) < CRYPTO_XP_GAP) return 0;
+      const xp = Math.max(1, Math.floor(Math.log10(amount)) - 2);
+      inv.cryptoXpAt = Date.now();
+      addInvestXp(xp);
+      return xp;
+    }
+    function cryptoMsg(sym, text, good) {
+      const el = $("cmsg-" + sym);
+      if (el) { el.textContent = text; el.className = good ? "income" : "flash"; }
+    }
+    function cryptoBuy(sym) {
+      if (isPaused()) return;
+      if (!cryptoLive(sym)) return cryptoMsg(sym, "No live price right now: trading is paused.");
+      const amount = Math.floor(Number($("cbuy-" + sym).value) || 0);
+      if (amount < CRYPTO_MIN) return cryptoMsg(sym, "Minimum trade is " + fmt(CRYPTO_MIN) + ".");
+      if (amount > state.money) return cryptoMsg(sym, "Not enough money.");
+      const fee = amount * cryptoFee(), price = live[sym].price;
+      const qty = (amount - fee) / price;
+      state.money -= amount;
+      const h = inv.crypto[sym];
+      h.qty += qty; h.cost += amount;
+      investRecord("crypto", amount, 0);
+      const xp = cryptoXp(amount);
+      $("cbuy-" + sym).value = "";
+      cryptoMsg(sym, `Bought ${qty.toFixed(6)} ${sym} at ${priceText(price)} (fee ${fmt(fee)})${xp ? ` · +${xp} XP` : ""}.`, true);
+      updateCounter(); updateInvestLive(); save(); renderCryptoNumbers();
+    }
+    function cryptoSell(sym, part) {
+      if (isPaused()) return;
+      const h = inv.crypto[sym];
+      if (!(h.qty > 0)) return cryptoMsg(sym, "You don't own any " + sym + ".");
+      if (!cryptoLive(sym)) return cryptoMsg(sym, "No live price right now: trading is paused.");
+      const price = live[sym].price;
+      const qty = part >= 1 ? h.qty : h.qty * part;
+      const value = qty * price;
+      if (value < CRYPTO_MIN && part < 1) return cryptoMsg(sym, "Minimum trade is " + fmt(CRYPTO_MIN) + " (or sell all).");
+      const fee = value * cryptoFee(), got = value - fee;
+      const costPart = h.cost * (qty / h.qty);
+      h.qty -= qty; h.cost -= costPart;
+      if (part >= 1 || h.qty < 1e-12) { h.qty = 0; h.cost = 0; }
+      state.money += got;
+      investRecord("crypto", 0, got);
+      const xp = value >= CRYPTO_MIN ? cryptoXp(value) : 0;
+      const pl = got - costPart;
+      cryptoMsg(sym, `Sold ${qty.toFixed(6)} ${sym} for ${fmt(got)} (fee ${fmt(fee)}) · ${pl >= 0 ? "profit +" : "loss −"}${fmt(Math.abs(pl))}${xp ? ` · +${xp} XP` : ""}.`, pl >= 0);
+      updateCounter(); updateInvestLive(); save(); renderCryptoNumbers();
+    }
+    const priceText = (p) => p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function renderCrypto() {
+      $("cryptoList").innerHTML = CRYPTOS.map(c => `
+        <div class="cryptoRow">
+          <div class="row" style="justify-content:flex-start; gap:18px; flex-wrap:wrap">
+            <div class="cryptoName"><span class="cryptoIcon">${c.icon}</span><div><b>${c.name}</b><div class="muted">${c.sym}</div></div></div>
+            <div><div class="muted">Live price</div><div class="bigValue" id="cprice-${c.sym}">–</div></div>
+            <div><div class="muted">24h</div><div class="bigValue" id="cchg-${c.sym}">–</div></div>
+            <div><div class="muted">You own</div><div class="bigValue" id="cqty-${c.sym}">0</div></div>
+            <div><div class="muted">Worth</div><div class="bigValue" id="cval-${c.sym}">0</div></div>
+            <div><div class="muted">Profit / loss</div><div class="bigValue" id="cpl-${c.sym}">–</div></div>
+          </div>
+          <div class="chartBox" id="cchart-${c.sym}"></div>
+          <div class="moneyRow">
+            <input id="cbuy-${c.sym}" type="number" min="${CRYPTO_MIN}" placeholder="Amount (min 1,000)">
+            <button class="btn ghost small" data-cpct="${c.sym}" data-pct="0.25">25%</button>
+            <button class="btn ghost small" data-cpct="${c.sym}" data-pct="0.5">50%</button>
+            <button class="btn ghost small" data-cpct="${c.sym}" data-pct="1">All</button>
+            <button class="btn" data-cbuy="${c.sym}">Buy ${c.sym}</button>
+            <button class="btn ghost" data-csell="${c.sym}" data-part="0.25">Sell 25%</button>
+            <button class="btn ghost" data-csell="${c.sym}" data-part="0.5">Sell 50%</button>
+            <button class="btn ghost" data-csell="${c.sym}" data-part="1">Sell all</button>
+          </div>
+          <div id="cmsg-${c.sym}" class="muted"></div>
+        </div>`).join("");
+      renderCryptoNumbers();
+    }
+    function renderCryptoNumbers() {
+      const anyLive = CRYPTOS.some(c => cryptoLive(c.sym));
+      const st = $("cryptoStatus");
+      st.textContent = anyLive ? `● Live (${cryptoSource === "binance" ? "Binance" : "Coinbase"})` : "● Connecting… trading paused";
+      st.classList.toggle("on", anyLive);
+      const f = cryptoFee();
+      $("cryptoFeeText").textContent = `Trading fee: ${(f * 100).toFixed(1)}% per buy and sell` +
+        (f > 0 ? ` (Investor level ${investLevel()}; next −0.1% at level ${investLevel() >= 90 ? 99 : (Math.floor(investLevel() / 10) + 1) * 10})` : " (Investor level 99: free!)");
+      for (const c of CRYPTOS) {
+        const L = live[c.sym], h = inv.crypto[c.sym];
+        if (!$("cprice-" + c.sym)) return;
+        $("cprice-" + c.sym).textContent = L.price ? priceText(L.price) + (cryptoLive(c.sym) ? "" : " ⏸") : "–";
+        const chg = L.open ? (L.price / L.open - 1) * 100 : null;
+        $("cchg-" + c.sym).textContent = chg === null ? "–" : (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%";
+        $("cchg-" + c.sym).className = "bigValue " + (chg > 0 ? "up" : chg < 0 ? "down" : "");
+        $("cqty-" + c.sym).textContent = h.qty ? h.qty.toFixed(6) : "0";
+        $("cval-" + c.sym).textContent = fmt(cryptoValue(c.sym));
+        const pl = h.qty ? cryptoValue(c.sym) - h.cost : null;
+        $("cpl-" + c.sym).textContent = pl === null ? "–" : (pl >= 0 ? "+" : "−") + fmt(Math.abs(pl));
+        $("cpl-" + c.sym).className = "bigValue " + (pl > 0 ? "up" : pl < 0 ? "down" : "");
+      }
+    }
+    // every second: numbers; every 5 seconds: one chart point (keeps the last ~20 minutes)
+    let cryptoTicks = 0;
+    setInterval(() => {
+      cryptoTicks++;
+      if (cryptoTicks % 5 === 0) for (const c of CRYPTOS) {
+        const L = live[c.sym];
+        if (cryptoLive(c.sym)) { L.hist.push(L.price); if (L.hist.length > 240) L.hist.shift(); }
+      }
+      if ($("investView").hidden) return;
+      renderCryptoNumbers();
+      if (cryptoTicks % 5 === 0) for (const c of CRYPTOS) if (live[c.sym].hist.length > 1) drawChart("cchart-" + c.sym, live[c.sym].hist, "Live price · last hour + since you opened the game");
+    }, 1000);
+
+    $("cryptoList").addEventListener("click", (e) => {
+      const pct = e.target.closest("[data-cpct]");
+      if (pct) { $("cbuy-" + pct.dataset.cpct).value = Math.floor(state.money * Number(pct.dataset.pct)); return; }
+      const buy = e.target.closest("[data-cbuy]");
+      if (buy) return cryptoBuy(buy.dataset.cbuy);
+      const sell = e.target.closest("[data-csell]");
+      if (sell) return cryptoSell(sell.dataset.csell, Number(sell.dataset.part));
+    });
+    var cryptoReady = true;   // investCurrent("crypto") can run before this block during start-up
+    renderCrypto();
+    seedCryptoHistory();
+    connectCrypto("binance");
 
     /* =====================================================================
        ACHIEVEMENTS: checked every second. Each one has a goal and a function that

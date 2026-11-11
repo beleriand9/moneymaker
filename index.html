@@ -1089,7 +1089,7 @@
         <button class="btn ghost small agentToggle" id="truckAgent" title="The agent picks a random contract 5 seconds after the offers appear. Fee: 2% of the contract, paid from your money.">🤖 Logistics agent: OFF</button>
         <button class="btn ghost small" data-info="truck">ℹ️ Info</button></div>
       <div class="muted infoBox" id="info-truck" hidden>Buy a semi-truck (150,000) for one of your 15 slots. Each free truck gets
-        <b>4 contract offers</b> across Europe: pick one and it drives. When it arrives, the whole contract is paid to your money.
+        <b>4 contract offers</b> on roads around the world: pick one and it drives. When it arrives, the whole contract is paid to your money.
         Longer routes pay more per second. A truck earns back its price in about 1.5 hours. Trips only move while the game is open.
         <br><br>🔧 <b>Breakdowns:</b> after each delivery there is a 1 in 100 chance the truck breaks down. It can't take new contracts
         until you pay for repairs (500 – 5,000).
@@ -5926,16 +5926,17 @@
         emptyText: "Semi-truck",
         // rate = 22 + 0.5 x average minutes, so longer routes pay a little more per second
         routes: [
-          { from: "Madrid 🇪🇸",    to: "Paris 🇫🇷",     min: 12, max: 13, rate: 28.3 },
-          { from: "Barcelona 🇪🇸", to: "Paris 🇫🇷",     min: 10, max: 11, rate: 27.3 },
-          { from: "Madrid 🇪🇸",    to: "Milan 🇮🇹",     min: 15, max: 17, rate: 30 },
-          { from: "Barcelona 🇪🇸", to: "Berlin 🇩🇪",    min: 18, max: 20, rate: 31.5 },
-          { from: "Madrid 🇪🇸",    to: "Frankfurt 🇩🇪", min: 18, max: 20, rate: 31.5 },
-          { from: "Rotterdam 🇳🇱", to: "Milan 🇮🇹",     min: 12, max: 13, rate: 28.3 },
-          { from: "Berlin 🇩🇪",    to: "Warsaw 🇵🇱",    min: 6,  max: 7,  rate: 25.3 },
-          { from: "Hamburg 🇩🇪",   to: "Milan 🇮🇹",     min: 13, max: 15, rate: 29 },
-          { from: "Valencia 🇪🇸",  to: "Amsterdam 🇳🇱", min: 20, max: 22, rate: 32.5 },
-          { from: "Warsaw 🇵🇱",    to: "Rotterdam 🇳🇱", min: 12, max: 13, rate: 28.3 },
+          // one road route on every continent; same trip lengths and pay as before
+          { from: "Chicago 🇺🇸",      to: "New York 🇺🇸",     min: 12, max: 13, rate: 28.3 },
+          { from: "Sydney 🇦🇺",       to: "Melbourne 🇦🇺",    min: 10, max: 11, rate: 27.3 },
+          { from: "Madrid 🇪🇸",       to: "Milan 🇮🇹",        min: 15, max: 17, rate: 30 },
+          { from: "Bangkok 🇹🇭",      to: "Kuala Lumpur 🇲🇾", min: 18, max: 20, rate: 31.5 },
+          { from: "Los Angeles 🇺🇸",  to: "Denver 🇺🇸",       min: 18, max: 20, rate: 31.5 },
+          { from: "Beijing 🇨🇳",      to: "Shanghai 🇨🇳",     min: 12, max: 13, rate: 28.3 },
+          { from: "Toronto 🇨🇦",      to: "Montreal 🇨🇦",     min: 6,  max: 7,  rate: 25.3 },
+          { from: "Johannesburg 🇿🇦", to: "Cape Town 🇿🇦",    min: 13, max: 15, rate: 29 },
+          { from: "São Paulo 🇧🇷",    to: "Buenos Aires 🇦🇷", min: 20, max: 22, rate: 32.5 },
+          { from: "Delhi 🇮🇳",        to: "Mumbai 🇮🇳",       min: 12, max: 13, rate: 28.3 },
         ],
       },
     };

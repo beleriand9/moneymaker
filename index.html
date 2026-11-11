@@ -1212,7 +1212,7 @@
 
     <!-- Two pages: classic investments and live crypto trading -->
     <div class="subLayout">
-      <nav class="subNav">
+      <nav class="subNav" id="investNav">
         <button class="subTab active" data-isub="invest">📈 Investing</button>
         <button class="subTab" data-isub="live">📡 Live trading</button>
       </nav>
@@ -6717,7 +6717,7 @@
       updateChartTools(); drawCryptoCharts(); save();
     });
     updateChartTools();
-    document.querySelector(".subNav").addEventListener("click", (e) => {
+    $("investNav").addEventListener("click", (e) => {
       const b = e.target.closest("[data-isub]");
       if (b) { showInvestPage(b.dataset.isub); save(); }
     });
